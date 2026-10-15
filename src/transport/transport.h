@@ -109,6 +109,7 @@ class transport
   long long ddmc_to_imc_;
   long long ddmc_max_leaps_;
   long long ddmc_stuck_;
+  long long ddmc_max_leaps_allowed_ = 100000;
 
 
   // current time in simulation

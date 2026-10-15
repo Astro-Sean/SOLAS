@@ -350,6 +350,7 @@ void transport::init(ParameterReader* par, grid_general *g)
  if (use_ddmc_)
  {
    ddmc_tau_ = params_->getScalar<double>("transport_ddmc_tau_threshold");
+   ddmc_max_leaps_allowed_ = params_->getScalar<int>("ddmc_max_leaps");
    ddmc_n_groups_ = params_->getScalar<int>("ddmc_n_groups");
    if (ddmc_n_groups_ < 1) ddmc_n_groups_ = 1;
    if (ddmc_n_groups_ > 1)

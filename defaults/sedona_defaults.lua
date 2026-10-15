@@ -50,6 +50,9 @@ transport_boundary_out_reflect   = 0
 transport_store_Jnu              = 1
 transport_use_ddmc               = 0
 transport_ddmc_tau_threshold     = 100
+ddmc_max_leaps                   = 100000  -- cap on DDMC diffusion steps per
+                                      -- entry; trapped packets are advanced
+                                      -- to the diffusion front as MC photons
 ddmc_n_groups                    = 1  -- >1 enables frequency-group-lumped
                                       -- DDMC: packets leak at their group's
                                       -- Rosseland mean, freeing line-center

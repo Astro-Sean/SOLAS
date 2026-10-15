@@ -162,6 +162,60 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // them anyway with a p.ind hack, costing 2 extra get_opacity
     // calls (locate + 2 interpolations) per diffusion leap.
 
+    // A packet that cannot diffuse out in a reasonable number of
+    // leaps is trapped (deep interior photon or one oscillating
+    // across an MC/DDMC boundary). Advance it to the diffusion front:
+    // place it at the inner edge of the first outward zone where its
+    // group opacity is below the DDMC threshold and continue as an MC
+    // packet. In steady-state mode the photon would eventually diffuse
+    // there anyway; this skips only the (correctly diffusion-limited)
+    // transport through the remaining thick zones.
+    if (my_leaps > ddmc_max_leaps_allowed_)
+    {
+      #pragma omp critical
+      {
+        ddmc_leaps_ += my_leaps;
+        if (my_leaps > ddmc_max_leaps_) ddmc_max_leaps_ = my_leaps;
+      }
+      #pragma omp atomic
+      ddmc_stuck_++;
+
+      int j_out = -1;
+      double rcoords_out[3];
+      for (int j=ii+1;j<nz;j++)
+      {
+        double dx_j;
+        grid->get_zone_size(j,&dx_j);
+        if (ddmc_opacity(j,i_nu,sigma_i)*dx_j <= ddmc_tau_) { j_out = j; break; }
+      }
+      double r_new;
+      if (j_out < 0)
+      {
+        // thick all the way out: put it at the surface
+        grid->coordinates(nz-1,rcoords_out);
+        r_new = rcoords_out[0]*(1.0 - ddmc_sml_push);
+        p.ind = nz-1;
+      }
+      else
+      {
+        grid->coordinates(j_out-1,rcoords_out);
+        r_new = rcoords_out[0]*(1.0 + ddmc_sml_push);
+        p.ind = j_out;
+      }
+      double mu_t  = sqrt(rangen.uniform());   // forward-peaked outward
+      double phi_t = 2.0*pc::pi*rangen.uniform();
+      double smu_t = sqrt(1.0 - mu_t*mu_t);
+      p.x[0] = r_new*smu_t*cos(phi_t);
+      p.x[1] = r_new*smu_t*sin(phi_t);
+      p.x[2] = r_new*mu_t;
+      // point it outward along the local radial direction
+      double rr2 = p.r();
+      p.D[0] = p.x[0]/rr2;
+      p.D[1] = p.x[1]/rr2;
+      p.D[2] = p.x[2]/rr2;
+      return moving;
+    }
+
     // return if no longer a DDMC particle
     // With ddmc_n_groups_ > 1 the check uses the packet's group
     // Rosseland mean, so a line-center packet leaves DDMC when its
@@ -304,13 +358,19 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // Perform the event with a smaller distance
     if (event == scatter)  // effective scattering
     {
-      // Ensure the effective scattering is inelastic
+      // Ensure the effective scattering is inelastic. Bound the
+      // resampling: a zone whose emissivity CDF is concentrated in a
+      // single frequency bin can never change i_nu and would loop
+      // forever, so after many tries accept the unchanged bin (the
+      // event degenerates to an elastic scatter).
       int now_i_nu = i_nu;
-      while (now_i_nu == i_nu)
+      int n_resample = 0;
+      while (now_i_nu == i_nu && n_resample < 100)
       {
         fate = do_scatter(&p,1.0);
         dshift = dshift_lab_to_comoving(&p);
         now_i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf);
+        n_resample++;
       }
     }
     else if (event == tstep)  // Stay in current zone
