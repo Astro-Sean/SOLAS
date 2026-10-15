@@ -159,6 +159,12 @@ opacity_line_prd_dnu        = 0.02 -- fractional frequency half-width of
                                    -- a few bulk Doppler widths, so
                                    -- photons reach the wings but cannot
                                    -- hop to unrelated lines
+particles_emit_flatten      = 0    -- fraction of thermal particles drawn
+                                   -- uniform-in-frequency-bin with energy
+                                   -- reweighted; recovers rare optical
+                                   -- line bins that carry ~1e-7 of the
+                                   -- emissivity weight. 0.2-0.5 works
+                                   -- well for line spectrum statistics
 
 
 -- output spectrum information

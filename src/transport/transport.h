@@ -167,6 +167,16 @@ class transport
 
   // the zone opacity/emissivity variables
   vector< cdf_array<OpacityType> >    emissivity_;
+  // importance-sampled emission: fraction emit_flatten_ of new thermal
+  // particles are drawn from a uniform-in-bin distribution instead of
+  // the emissivity CDF, with p.e rescaled by emis_prob/sample_prob.
+  // Optical line bins carry ~1e-7 of the zone emissivity weight, so
+  // unbiased emission essentially never creates line photons even
+  // though the gas emits them; flattening fixes the statistics, not
+  // the physics (mean emitted energy spectrum is unchanged).
+  double emit_flatten_ = 0;
+  vector< cdf_array<OpacityType> >    emit_cdf_;
+  vector< vector<double> >            emit_wt_;
   vector< vector<OpacityType> >       abs_opacity_;
   vector< vector<OpacityType> >       scat_opacity_;
   // resonance-line scattering opacity: the A/(A+C) albedo-weighted
@@ -293,9 +303,11 @@ class transport
   void   emit_thermal(double dt);
   void   emit_heating_source(double dt);
   void   emit_from_pointsoures(double dt);
-  void   create_isotropic_particle(int,PType,double,double);
+  void   create_isotropic_particle(int,PType,double,double,int importance=0);
   void   initialize_particles(int);
-  void sample_photon_frequency(particle*);
+  // returns the energy weight the sampled frequency carries (1 unless
+  // importance sampling flattened the emission CDF)
+  double sample_photon_frequency(particle*,int importance=0);
 
   // special relativistic functions
   void   transform_comoving_to_lab(particle*);

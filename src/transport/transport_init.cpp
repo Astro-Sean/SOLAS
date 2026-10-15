@@ -258,6 +258,7 @@ void transport::init(ParameterReader* par, grid_general *g)
   }
   use_line_res_scatter_ = params_->getScalar<int>("opacity_line_res_scatter");
   res_prd_dnu_ = params_->getScalar<double>("opacity_line_prd_dnu");
+  emit_flatten_ = params_->getScalar<double>("particles_emit_flatten");
   if (verbose) std::cout << "# From fuzzfile \"" << fuzzfile << "\" " <<
        n_fuzzlines << " lines used\n";
   if (verbose) gas_state_vec_[0].print_properties();
@@ -298,6 +299,11 @@ void transport::init(ParameterReader* par, grid_general *g)
   if (!omit_scattering_) scat_opacity_.resize(grid->n_zones);
   if (use_line_res_scatter_) line_res_opacity_.resize(grid->n_zones);
   emissivity_.resize(grid->n_zones);
+  if (emit_flatten_ > 0)
+  {
+    emit_cdf_.resize(grid->n_zones);
+    emit_wt_.resize(grid->n_zones);
+  }
   J_nu_.resize(grid->n_zones);
   n_freq_variables += 2;
   if (!omit_scattering_) n_freq_variables +=1;
@@ -326,6 +332,11 @@ void transport::init(ParameterReader* par, grid_general *g)
 
     // allocate emissivity
     emissivity_[i].resize(nu_grid_.size());
+    if (emit_flatten_ > 0)
+    {
+      emit_cdf_[i].resize(nu_grid_.size());
+      emit_wt_[i].resize(nu_grid_.size());
+    }
 
     // allocate Jnu (radiation field)
     if (store_Jnu_)

@@ -24,25 +24,25 @@ void transport::emit_particles(double dt)
 //------------------------------------------------------------
 // sample photon frequency from local emissivity
 //------------------------------------------------------------
-void transport::sample_photon_frequency(particle *p)
+double transport::sample_photon_frequency(particle *p, int importance)
 {
+  double wt = 1.0;
   if (p->type == photon)
   {
-    int inu  = emissivity_[p->ind].sample(rangen.uniform());
+    int inu;
+    if (importance && emit_flatten_ > 0)
+    {
+      inu = emit_cdf_[p->ind].sample(rangen.uniform());
+      wt  = emit_wt_[p->ind][inu];
+    }
+    else
+      inu = emissivity_[p->ind].sample(rangen.uniform());
     p->nu = nu_grid_.sample(inu,rangen.uniform());
     if (p->nu > 1e20) std::cout << "pnu " << p->nu << "\n";
   }
-  else if (p->type == gammaray)
-  {
-    p->nu = 1;
-  }
   else
-  {
     p->nu = 1;
-  }
-
-
-
+  return wt;
 }
 
 //------------------------------------------------------------
@@ -52,7 +52,7 @@ void transport::sample_photon_frequency(particle *p)
 // the grid
 //------------------------------------------------------------
 void transport::create_isotropic_particle
-(int i, PType type, double Ep, double t)
+(int i, PType type, double Ep, double t, int importance)
 {
   particle p;
 
@@ -86,11 +86,12 @@ void transport::create_isotropic_particle
   p.D[2] = mu;
 
   // sample frequency from local emissivity
-  sample_photon_frequency(&p);
+  double w = sample_photon_frequency(&p, importance);
 //  p.nu = 1e16; //debug
 
-  // set packet energy
-  p.e  = Ep;
+  // set packet energy; w corrects for flattened importance sampling
+  // so the mean emitted spectrum still equals the zone emissivity
+  p.e  = Ep*w;
 
   // lorentz transform from the comoving to lab frame
   transform_comoving_to_lab(&p);
@@ -287,7 +288,7 @@ void transport::emit_thermal(double dt)
   {
     int i = zone_emission_cdf_.sample(rangen.uniform());
     double t  = t_now_ + dt*rangen.uniform();
-    create_isotropic_particle(i,photon,E_p,t);
+    create_isotropic_particle(i,photon,E_p,t,1);
   }
 
   if (verbose) cout << "# E thermal = " << E_tot << " ergs; ";

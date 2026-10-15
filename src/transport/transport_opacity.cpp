@@ -257,6 +257,27 @@ void transport::set_opacity(double dt)
       }
       emissivity_[i].normalize();
 
+      // flattened importance CDF: sample_j = (1-f)*emis_j + f/nbins,
+      // weight_j = emis_j/sample_j. Emitted energy is unchanged in the
+      // mean; rare line bins just get sampled far more often.
+      if (emit_flatten_ > 0)
+      {
+        int nb = nu_grid_.size();
+        double f = emit_flatten_;
+        for (int j=0;j<nb;j++)
+        {
+          double e = emissivity_[i].get_value(j);
+          double s = (1.0 - f)*e + f/nb;
+          emit_cdf_[i].set_value(j,s);
+        }
+        emit_cdf_[i].normalize();
+        for (int j=0;j<nb;j++)
+        {
+          double s = emit_cdf_[i].get_value(j);
+          emit_wt_[i][j] = (s > 0) ? emissivity_[i].get_value(j)/s : 0;
+        }
+      }
+
       // Optional per-zone emissivity/opacity dump for diagnostics.
       // SEDONA_DUMP_EMIS_ZONES="i1 i2 ..." writes one text file per
       // zone per opacity call: nu, emissivity density, abs, scat.
