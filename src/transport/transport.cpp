@@ -69,8 +69,35 @@ void transport::step(double dt)
   int progress_interval = (n_particles > 10) ? n_particles / 10 : 1;
   if (progress_interval < 1) progress_interval = 1;
 
+  // Per-thread tally buffers: sized [thread][zone], allocated lazily.
+  int nz_tl = grid->n_zones;
+  int ntl = 1;
+#ifdef _OPENMP
+  ntl = omp_get_max_threads();
+#endif
+  if ((int)tl_e_abs_.size() != ntl || (int)tl_e_abs_[0].size() != nz_tl)
+  {
+    tl_e_abs_.assign(ntl, vector<double>(nz_tl, 0.0));
+    tl_J_nu0_.assign(ntl, vector<double>(nz_tl, 0.0));
+    tl_fx_.assign(ntl, vector<double>(nz_tl, 0.0));
+    tl_fy_.assign(ntl, vector<double>(nz_tl, 0.0));
+    tl_fz_.assign(ntl, vector<double>(nz_tl, 0.0));
+    tl_fr_.assign(ntl, vector<double>(nz_tl, 0.0));
+  }
+
   #pragma omp parallel
   {
+    int tid = tl_tid();
+    for (int z=0; z<nz_tl; z++)
+    {
+      tl_e_abs_[tid][z] = 0;
+      tl_J_nu0_[tid][z] = 0;
+      tl_fx_[tid][z] = 0;
+      tl_fy_[tid][z] = 0;
+      tl_fz_[tid][z] = 0;
+      tl_fr_[tid][z] = 0;
+    }
+
     int local_count = 0;
     #pragma omp for schedule(guided)
     for(int i=0; i<n_particles; i++)
@@ -118,6 +145,30 @@ void transport::step(double dt)
           }
         }
       }
+    }
+
+    // The omp for above ends with a barrier, so all particles are done.
+    // Merge per-thread tallies into the shared zone fields; each zone
+    // is handled by exactly one thread, so no atomics are needed.
+    #pragma omp for
+    for (int z=0; z<nz_tl; z++)
+    {
+      double ea=0, jn=0, fx=0, fy=0, fz=0, fr=0;
+      for (int t=0; t<ntl; t++)
+      {
+        ea += tl_e_abs_[t][z];
+        jn += tl_J_nu0_[t][z];
+        fx += tl_fx_[t][z];
+        fy += tl_fy_[t][z];
+        fz += tl_fz_[t][z];
+        fr += tl_fr_[t][z];
+      }
+      grid->z[z].e_abs  += ea;
+      J_nu_[z][0] += jn;
+      grid->z[z].fx_rad += fx;
+      grid->z[z].fy_rad += fy;
+      grid->z[z].fz_rad += fz;
+      grid->z[z].fr_rad += fr;
     }
   }
 
@@ -418,35 +469,34 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     // tally in contribution to zone's radiation energy (both *lab* frame)
     double this_E = p.e*this_d;
 
+    // Tally into per-thread buffers instead of atomics; merged into
+    // the zone fields at the end of the step.
+    int tid = tl_tid();
+
     // store absorbed energy in *comoving* frame
     // (will turn into rate by dividing by dt later)
     // Extra dshift definitely needed here (two total)
     // don't add gamma-rays here (they would be separate)
     if (p.type == photon)
     {
-      #pragma omp atomic
-      zone->e_abs  += this_E*dshift*(continuum_opac_cmf)*eps_absorb_cmf*dshift * zone->eps_imc;
+      tl_e_abs_[tid][p.ind] += this_E*dshift*(continuum_opac_cmf)*eps_absorb_cmf*dshift * zone->eps_imc;
       if (store_Jnu_)
 	     #pragma omp atomic
 	      J_nu_[p.ind][i_nu] += this_E;
       else
-	     #pragma omp atomic
-	      J_nu_[p.ind][0] += this_E;
+        tl_J_nu0_[tid][p.ind] += this_E;
     }
 
      // tally radiation force
      // Extra dshift definitely needed here (two total)
-    #pragma omp atomic
-    zone->fx_rad += this_E*dshift*continuum_opac_cmf*p.D[0] * dshift;
-    #pragma omp atomic
-    zone->fy_rad += this_E*dshift*continuum_opac_cmf*p.D[1] * dshift;
-    #pragma omp atomic
-    zone->fz_rad += this_E*dshift*continuum_opac_cmf*p.D[2] * dshift;
+    double this_F = this_E*dshift*continuum_opac_cmf*dshift;
+    tl_fx_[tid][p.ind] += this_F*p.D[0];
+    tl_fy_[tid][p.ind] += this_F*p.D[1];
+    tl_fz_[tid][p.ind] += this_F*p.D[2];
     // radial radiation force
     double rr = sqrt(p.x[0]*p.x[0] + p.x[1]*p.x[1] + p.x[2]*p.x[2]);
     double xdotD = p.x[0]*p.D[0] + p.x[1]*p.D[1] + p.x[2]*p.D[2];
-    #pragma omp atomic
-    zone->fr_rad += this_E*dshift*continuum_opac_cmf*xdotD/rr * dshift;
+    tl_fr_[tid][p.ind] += this_F*xdotD/rr;
 
     // move particle the distance
     p.x[0] += this_d*p.D[0];

@@ -198,6 +198,40 @@ class transport
   vector< vector<real> > line_J_;
   double line_velocity_width_;
 
+  // Per-thread radiation tally buffers indexed [thread][zone]. The
+  // propagation loops write here instead of using omp atomic on the
+  // shared zone fields, which serializes when many threads tally to
+  // the same optically thick zone. Buffers are zeroed and merged into
+  // the zone fields once per transport step. Allocated lazily in
+  // step() since the zone count is known only after the grid exists.
+  vector< vector<double> > tl_e_abs_;
+  vector< vector<double> > tl_J_nu0_;
+  vector< vector<double> > tl_fx_;
+  vector< vector<double> > tl_fy_;
+  vector< vector<double> > tl_fz_;
+  vector< vector<double> > tl_fr_;
+
+  int tl_tid() const {
+#ifdef _OPENMP
+    return omp_get_thread_num();
+#else
+    return 0;
+#endif
+  }
+
+  // Cache of solved LTE gas states, one entry per zone. For LTE
+  // (use_nlte_ == 0) solve_state ignores J_nu and depends only on
+  // (density, temperature, mass fractions), so when those inputs are
+  // unchanged the previous solve can be restored exactly. This avoids
+  // re-solving the Brent/level-population problem every iteration in
+  // steady-iterate runs where zone T/rho are fixed. NLTE zones are
+  // never cached because they depend on J_nu.
+  vector<GasState> lte_state_cache_;
+  vector<double>   lte_cache_T_;
+  vector<double>   lte_cache_rho_;
+  vector< vector<double> > lte_cache_X_;
+  vector<char>     lte_cache_valid_;
+
   // setup functions
   void setup_core_emission();
   void setup_pointsource_emission();

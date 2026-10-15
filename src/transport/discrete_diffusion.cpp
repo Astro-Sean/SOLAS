@@ -34,15 +34,11 @@ ParticleFate transport::discrete_diffuse_IMD(particle &p, double dt)
     if (p.ind == -1) {return absorbed;}
     if (p.ind == -2) {return escaped;}
 
-    // pointer to current zone
-    zone *zone = &(grid->z[p.ind]);
-
     // add in tally of absorbed and total radiation energy
-    #pragma omp atomic
-    zone->e_abs += p.e*ddmc_P_abs_[p.ind];
+    int tid = tl_tid();
+    tl_e_abs_[tid][p.ind] += p.e*ddmc_P_abs_[p.ind];
     //zone->e_rad += p.e*ddmc_P_stay_[p.ind];
-    #pragma omp atomic
-    J_nu_[p.ind][0] += p.e*ddmc_P_stay_[p.ind]*dt*pc::c;
+    tl_J_nu0_[tid][p.ind] += p.e*ddmc_P_stay_[p.ind]*dt*pc::c;
 
     // total probability of diffusing in some direction
     double P_diff = ddmc_P_up_[p.ind]  + ddmc_P_dn_[p.ind];
@@ -300,10 +296,9 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // tally the contribution of zone's radiation energy
     // only one factor of dshift above because opacity is in cmf,
     // just need to covert p.e from lab to cmf.
-    #pragma omp atomic
-    J_nu_[p.ind][0] += p.e*this_d;
-    #pragma omp atomic
-    grid->z[p.ind].e_abs  += (p.e*dshift)*this_d*sigma_i*eps_i_cmf;
+    int tid = tl_tid();
+    tl_J_nu0_[tid][p.ind] += p.e*this_d;
+    tl_e_abs_[tid][p.ind] += (p.e*dshift)*this_d*sigma_i*eps_i_cmf;
 
     // Perform the event with a smaller distance
     if (event == scatter)  // effective scattering
@@ -703,13 +698,11 @@ ParticleFate transport::discrete_diffuse_RandomWalk(particle &p, double t_stop)
     assert(R_diffuse <= dx);
 
     // add in tally of absorbed and total radiation energy
-    //#pragma omp atomic
     //zone->e_abs += p.e*ddmc_P_abs_[p.ind];
     //zone->e_rad += p.e*ddmc_P_stay_[p.ind];
-    #pragma omp atomic
-    J_nu_[p.ind][0] += p.e*dt_step*pc::c;
-    #pragma omp atomic
-    grid->z[p.ind].e_abs  += p.e*dt_step*pc::c*planck_mean_opacity_[p.ind];
+    int tid = tl_tid();
+    tl_J_nu0_[tid][p.ind] += p.e*dt_step*pc::c;
+    tl_e_abs_[tid][p.ind] += p.e*dt_step*pc::c*planck_mean_opacity_[p.ind];
 
     // move the particle a distance R_diffuse
     double diffuse_dir[3];

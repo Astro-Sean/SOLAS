@@ -140,6 +140,16 @@ void transport::set_opacity(double dt)
       if (nlte_was_on && z->rho < nlte_dens_min_)
         gas_state_ptr->use_nlte_ = 0;
 
+      // Lazy allocation of the LTE solve cache (one entry per zone)
+      if (lte_cache_valid_.size() != (size_t)grid->n_zones)
+      {
+        lte_state_cache_.resize(grid->n_zones);
+        lte_cache_T_.assign(grid->n_zones, 0.0);
+        lte_cache_rho_.assign(grid->n_zones, 0.0);
+        lte_cache_X_.assign(grid->n_zones, vector<double>());
+        lte_cache_valid_.assign(grid->n_zones, 0);
+      }
+
       if (first_step_)
       {
         zone* z = &(grid->z[i]);
@@ -166,7 +176,29 @@ void transport::set_opacity(double dt)
         {
           if (gas_state_ptr->total_grey_opacity_ == 0)
           {
-            solve_error = gas_state_ptr->solve_state(J_nu_[i]);
+            // LTE solves are deterministic in (rho, T, X) and ignore
+            // J_nu, so a cached state with identical inputs is exact.
+            bool cache_hit = false;
+            if (!gas_state_ptr->use_nlte_ && lte_cache_valid_[i]
+                && z->rho == lte_cache_rho_[i]
+                && gas_state_ptr->temp_ == lte_cache_T_[i]
+                && X_now == lte_cache_X_[i])
+            {
+              *gas_state_ptr = lte_state_cache_[i];
+              cache_hit = true;
+            }
+            if (!cache_hit)
+            {
+              solve_error = gas_state_ptr->solve_state(J_nu_[i]);
+              if (!gas_state_ptr->use_nlte_)
+              {
+                lte_state_cache_[i] = *gas_state_ptr;
+                lte_cache_T_[i]   = gas_state_ptr->temp_;
+                lte_cache_rho_[i] = z->rho;
+                lte_cache_X_[i]   = X_now;
+                lte_cache_valid_[i] = 1;
+              }
+            }
           }
         }
       }
