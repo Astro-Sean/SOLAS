@@ -226,9 +226,25 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
   // zero out arrays
   for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0;}
 
+  // Frequency window covered by the grid plus a small margin for
+  // Doppler-shifted line wings. Lines outside this cannot contribute
+  // to any grid bin, so skipping them early avoids the level lookups
+  // and locate calls for the large majority of lines in a typical
+  // atomic dataset (which spans far-UV to far-IR while the transport
+  // grid often covers only the optical).
+  double nu_min_win = nu_grid_.minval();
+  double nu_max_win = nu_grid_.maxval();
+
   // loop over all lines
   for (int i=0;i<n_lines_;++i)
   {
+    double nu_0  = adata_->get_line_nu(i);
+    double dnu   = line_beta_dop_*nu_0;
+
+    // line support is +-5*dnu (see below); cheap early-out
+    if (nu_0 + 5.0*dnu < nu_min_win) continue;
+    if (nu_0 - 5.0*dnu > nu_max_win) continue;
+
     int lu  = adata_->get_line_u(i);
     int ll  = adata_->get_line_l(i);
 
@@ -236,9 +252,7 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     double nu    = lev_n_[lu];
     double gl    = 1.0*adata_->get_lev_g(ll);
     double gu    = 1.0*adata_->get_lev_g(lu);
-    double nu_0  = adata_->get_line_nu(i);
 
-    double dnu   = line_beta_dop_*nu_0;
     double A_ul  = adata_->get_line_A(i);
     double gamma = A_ul;
     double a_voigt = gamma/4/pc::pi/dnu;

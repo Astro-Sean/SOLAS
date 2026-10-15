@@ -154,19 +154,17 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // Use comoving nu to get the total/transport opacity, (abs + scat).
     // The Planck mean could be used for tallying energy absorption,
     // but use actual nu-dependent opacity for leakage opacity calculation.
-    double k_p = planck_mean_opacity_[ii];
-    double sigma_i, sigma_im1, sigma_ip1;
+    double sigma_i;
 
     int i_nu;
-    double dshift, eps_i_cmf, eps_ip1_cmf, eps_im1_cmf;
+    double dshift, eps_i_cmf;
     dshift = dshift_lab_to_comoving(&p);
     i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf);
-    // Sorry about this super hacky way of getting neighbor's opacities
-    p.ind = ip;
-    i_nu = get_opacity(p,dshift,sigma_ip1,eps_ip1_cmf);
-    p.ind = im;
-    i_nu = get_opacity(p,dshift,sigma_im1,eps_im1_cmf);
-    p.ind = ii; // set it back to original index
+    // Neighbor opacities are not needed: zone checks use the
+    // frequency-dependent opacity of this zone only, and leakage
+    // rates use the tabulated Rosseland means. The old code fetched
+    // them anyway with a p.ind hack, costing 2 extra get_opacity
+    // calls (locate + 2 interpolations) per diffusion leap.
 
     // return if no long a DDMC particle
     // Use frequency-dependent opacity for the DDMC zone check:
@@ -275,9 +273,8 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
       if (eps_i_cmf > 0.0)
       {
         k_es_inelastic = sigma_i*eps_i_cmf;
-        // setting elastic_frac from emissivity_
-        dshift = dshift_lab_to_comoving(&p);
-        i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf);
+        // i_nu/dshift/sigma_i/eps_i_cmf are unchanged since the call
+        // above; the old code recomputed them here.
         // emissivity_ has been normalized in transport_opacity.cpp
         double elastic_frac = emissivity_[p.ind].get_value(i_nu);
         double inelastic_frac = 1.0 - elastic_frac;

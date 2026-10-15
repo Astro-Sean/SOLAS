@@ -275,9 +275,8 @@ ParticleFate transport::propagate(particle &p, double dt)
     if (use_ddmc_)
     {
        double sigma_i, dshift, eps_i;
-       int i_nu;
        dshift = dshift_lab_to_comoving(&p);
-       i_nu = get_opacity(p,dshift,sigma_i,eps_i);
+       get_opacity(p,dshift,sigma_i,eps_i);
 
        double dr;
        grid->get_zone_size(p.ind,&dr);
@@ -327,15 +326,21 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     assert(p.ind >= 0);
     zone *zone = &(grid->z[p.ind]);
 
+    // determine the doppler shift from comoving to lab, and get the
+    // comoving opacity/absorption fraction (epsilon) once -- reused
+    // for the DDMC zone check below and the step-size calculation.
+    double dshift = dshift_lab_to_comoving(&p);
+    double continuum_opac_cmf, eps_absorb_cmf;
+    int i_nu = get_opacity(p,dshift,continuum_opac_cmf,eps_absorb_cmf);
+    double sigma_i = continuum_opac_cmf;
+    double eps_i = eps_absorb_cmf;
+    double dr = 0;
+
     // check if we have moved into a DDMC zone
     // Instead of using ddmc_use_in_zone_[p.ind] as in the gray case,
     // it is generalized to be particle- and frequency-dependent.
     if (use_ddmc_)
     {
-      int i_nu;
-      double dshift = dshift_lab_to_comoving(&p);
-      double sigma_i, dr, eps_i;
-      i_nu = get_opacity(p,dshift,sigma_i,eps_i);
       grid->get_zone_size(p.ind,&dr);
       double ztau = sigma_i * dr;
       //if ((ddmc_use_in_zone_[p.ind]) && (p.type == photon))
@@ -347,17 +352,15 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     double d_bn = 0;
     int new_ind = grid->get_next_zone(p.x,p.D,p.ind,r_core_,&d_bn);
 
-    // determine the doppler shift from comoving to lab
-    double dshift = dshift_lab_to_comoving(&p);
-
     // Check whether the neighbor is a DDMC zone
     bool new_cell_ddmc = false;
-    double sigma_i, eps_i, dr;
     if (use_ddmc_ && (new_ind >=0))
     {
        int old_ind = p.ind;
        p.ind = new_ind;
-       int i_nu = get_opacity(p,dshift,sigma_i,eps_i);
+       // sigma_i/eps_i/dr end up holding the *destination* zone's
+       // values; they are passed to move_across_DDMC_interface below.
+       get_opacity(p,dshift,sigma_i,eps_i);
        grid->get_zone_size(p.ind,&dr);
        p.ind = old_ind;
 
@@ -365,10 +368,6 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
        if ((ztau > ddmc_tau_) && (p.type == photon)) new_cell_ddmc = true;
        //if ((ddmc_use_in_zone_[new_ind]) && (p.type == photon)) new_cell_ddmc = true;
     }
-
-    // get continuum opacity and absorption fraction (epsilon)
-    double continuum_opac_cmf,eps_absorb_cmf;
-    int i_nu = get_opacity(p,dshift,continuum_opac_cmf,eps_absorb_cmf);
 
     // check for distance to next frequency bin
     // nushift = nu*(dvds*l)/c --> l = nushift/nu*c/dvds
