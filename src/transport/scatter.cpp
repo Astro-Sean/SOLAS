@@ -348,13 +348,14 @@ void transport::isotropic_scatter(particle *p, int redist)
     if (i0 < 0) i0 = 0;
     if (i0 >= nb) i0 = nb - 1;
     const vector<OpacityType> &res = line_res_opacity_[p->ind];
-    int lo = i0, hi = i0;
-    double wsum = res[i0];
-    for (int k=1;k<=res_prd_window_ && (i0-k >= 0 || i0+k < nb);k++)
-    {
-      if (i0-k >= 0 && res[i0-k] > 0) {lo = i0-k; wsum += res[lo];}
-      if (i0+k < nb && res[i0+k] > 0) {hi = i0+k; wsum += res[hi];}
-    }
+    double nu_lo = p->nu*(1.0 - res_prd_dnu_);
+    double nu_hi = p->nu*(1.0 + res_prd_dnu_);
+    int lo = nu_grid_.locate_within_bounds(nu_lo);
+    int hi = nu_grid_.locate_within_bounds(nu_hi);
+    if (lo < 0) lo = 0;
+    if (hi < 0 || hi >= nb) hi = nb - 1;
+    double wsum = 0;
+    for (int j=lo;j<=hi;j++) wsum += res[j];
     if (wsum > 0)
     {
       double r = rangen.uniform()*wsum;

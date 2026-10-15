@@ -154,6 +154,11 @@ opacity_line_res_scatter    = 0    -- treat the A/(A+C) albedo fraction
                                    -- nu within the local line profile at
                                    -- each scatter (recommended; faster
                                    -- and more accurate for strong lines)
+opacity_line_prd_dnu        = 0.02 -- fractional frequency half-width of
+                                   -- the mode-2 redistribution window;
+                                   -- a few bulk Doppler widths, so
+                                   -- photons reach the wings but cannot
+                                   -- hop to unrelated lines
 
 
 -- output spectrum information

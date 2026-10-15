@@ -257,6 +257,7 @@ void transport::init(ParameterReader* par, grid_general *g)
         params_->getScalar<int>("opacity_line_res_scatter"));
   }
   use_line_res_scatter_ = params_->getScalar<int>("opacity_line_res_scatter");
+  res_prd_dnu_ = params_->getScalar<double>("opacity_line_prd_dnu");
   if (verbose) std::cout << "# From fuzzfile \"" << fuzzfile << "\" " <<
        n_fuzzlines << " lines used\n";
   if (verbose) gas_state_vec_[0].print_properties();
