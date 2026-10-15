@@ -50,6 +50,11 @@ transport_boundary_out_reflect   = 0
 transport_store_Jnu              = 1
 transport_use_ddmc               = 0
 transport_ddmc_tau_threshold     = 100
+ddmc_n_groups                    = 1  -- >1 enables frequency-group-lumped
+                                      -- DDMC: packets leak at their group's
+                                      -- Rosseland mean, freeing line-center
+                                      -- photons. Try 10-40 for line-rich
+                                      -- interacting-SN models.
 transport_fleck_alpha            = 0
 
 -- whether or not to fix RNG seed

@@ -668,6 +668,62 @@ double GasState::get_rosseland_mean
 }
 
 //----------------------------------------------------------------
+// Rosseland means restricted to DDMC frequency groups. grp maps each
+// frequency bin to a group index; out[g] receives the dB/dT-weighted
+// harmonic mean over the bins of group g. Group means let a DDMC
+// packet diffuse at the rate of the continuum windows in its own
+// group instead of either its exact line-center opacity (trapping)
+// or the whole-grid Rosseland mean (too fast for trapped groups).
+//----------------------------------------------------------------
+void GasState::get_group_rosseland_means
+(const std::vector<OpacityType>& abs, const std::vector<OpacityType>& scat,
+ const std::vector<int>& grp, std::vector<OpacityType>& out)
+{
+	if ((abs.size() != nu_grid_.size())||(scat.size() != nu_grid_.size()))
+	{
+		if (verbose_) {
+			std::cerr << "# Warning: opacity vector of wrong length in get_group_rosseland_means";
+			std::cerr << std::endl; }
+		return;
+	}
+
+	if (nu_grid_.size() == 1)
+	{
+		for (size_t g=0;g<out.size();g++) out[g] = abs[0] + scat[0];
+		return;
+	}
+
+	std::vector<double> norm(out.size(),0.0);
+	std::vector<double> asum(out.size(),0.0);
+	std::vector<int>    nbin(out.size(),0);
+	for (size_t g=0;g<out.size();g++) out[g] = 0;
+
+	for (size_t i=0;i<nu_grid_.size();i++)
+ 	{
+		double nu   = nu_grid_.center(i);
+		double zeta = pc::h*nu/pc::k/temp_;
+		double ezeta = exp(zeta);
+		double dBdT  = pow(nu,4)*ezeta/(ezeta-1)/(ezeta-1);
+		if (isnan(dBdT)) dBdT = 0;
+		double W = dBdT*nu_grid_.delta(i);
+		int g = grp[i];
+		out[g]  += W/(abs[i] + scat[i]);
+		norm[g] += W;
+		asum[g] += abs[i] + scat[i];
+		nbin[g] += 1;
+	}
+	for (size_t g=0;g<out.size();g++)
+	{
+		// when the dB/dT weight under/overflows (degenerate grids) fall
+		// back to the arithmetic mean over the group's bins; empty
+		// groups are unreachable but still get a defined value
+		if (norm[g] > 0 && out[g] > 0) out[g] = norm[g]/out[g];
+		else if (nbin[g] > 0)          out[g] = asum[g]/nbin[g];
+		else                           out[g] = 0;
+	}
+}
+
+//----------------------------------------------------------------
 // Calculate a Rosseland mean of the passed array x
 // Passed:
 //   x -- a vector of the same size of the frequency bin

@@ -63,6 +63,9 @@ class GasState
   (const std::vector<OpacityType> &abs, const std::vector<OpacityType>& scat);
   double get_rosseland_mean
   (const std::vector<OpacityType>& abs, const std::vector<OpacityType>& scat);
+  void get_group_rosseland_means
+  (const std::vector<OpacityType>& abs, const std::vector<OpacityType>& scat,
+   const std::vector<int>& grp, std::vector<OpacityType>& out);
 
   std::vector <double> user_opacity_array_;
 

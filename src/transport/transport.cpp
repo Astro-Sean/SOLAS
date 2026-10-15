@@ -327,12 +327,12 @@ ParticleFate transport::propagate(particle &p, double dt)
     {
        double sigma_i, dshift, eps_i;
        dshift = dshift_lab_to_comoving(&p);
-       get_opacity(p,dshift,sigma_i,eps_i);
+       int i_nu = get_opacity(p,dshift,sigma_i,eps_i);
 
        double dr;
        grid->get_zone_size(p.ind,&dr);
 
-       double ztau = sigma_i * dr;
+       double ztau = ddmc_opacity(p.ind,i_nu,sigma_i) * dr;
        if ((ztau > ddmc_tau_) && (p.type == photon)) in_ddmc_zone = 1;
        //if ((ddmc_use_in_zone_[p.ind]) && (p.type == photon)) in_ddmc_zone = 1;
     }
@@ -393,7 +393,7 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     if (use_ddmc_)
     {
       grid->get_zone_size(p.ind,&dr);
-      double ztau = sigma_i * dr;
+      double ztau = ddmc_opacity(p.ind,i_nu,sigma_i) * dr;
       //if ((ddmc_use_in_zone_[p.ind]) && (p.type == photon))
       if ((ztau > ddmc_tau_) && (p.type == photon))
         return moving;
@@ -411,11 +411,11 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
        p.ind = new_ind;
        // sigma_i/eps_i/dr end up holding the *destination* zone's
        // values; they are passed to move_across_DDMC_interface below.
-       get_opacity(p,dshift,sigma_i,eps_i);
+       int i_nu_nb = get_opacity(p,dshift,sigma_i,eps_i);
        grid->get_zone_size(p.ind,&dr);
        p.ind = old_ind;
 
-       double ztau = sigma_i * dr;
+       double ztau = ddmc_opacity(new_ind,i_nu_nb,sigma_i) * dr;
        if ((ztau > ddmc_tau_) && (p.type == photon)) new_cell_ddmc = true;
        //if ((ddmc_use_in_zone_[new_ind]) && (p.type == photon)) new_cell_ddmc = true;
     }

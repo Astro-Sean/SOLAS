@@ -252,6 +252,9 @@ void transport::set_opacity(double dt)
         gas_state_ptr->get_planck_mean(abs_opacity_[i],scat_opacity_[i]);
       rosseland_mean_opacity_[i] =
         gas_state_ptr->get_rosseland_mean(abs_opacity_[i],scat_opacity_[i]);
+      if (ddmc_n_groups_ > 1)
+        gas_state_ptr->get_group_rosseland_means(abs_opacity_[i],
+            scat_opacity_[i], nu_to_group_, rosseland_group_opacity_[i]);
 
       //------------------------------------------------------
       // gamma-ray opacity (compton + photo-electric)

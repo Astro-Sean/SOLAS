@@ -350,6 +350,24 @@ void transport::init(ParameterReader* par, grid_general *g)
  if (use_ddmc_)
  {
    ddmc_tau_ = params_->getScalar<double>("transport_ddmc_tau_threshold");
+   ddmc_n_groups_ = params_->getScalar<int>("ddmc_n_groups");
+   if (ddmc_n_groups_ < 1) ddmc_n_groups_ = 1;
+   if (ddmc_n_groups_ > 1)
+   {
+     // partition the transport frequency grid into contiguous groups,
+     // equal in bin index (equal log-width on a log grid)
+     nu_to_group_.resize(nu_grid_.size());
+     for (int j=0;j<nu_grid_.size();j++)
+     {
+       nu_to_group_[j] = (int)((long long)j*ddmc_n_groups_/nu_grid_.size());
+       if (nu_to_group_[j] >= ddmc_n_groups_)
+         nu_to_group_[j] = ddmc_n_groups_ - 1;
+     }
+     rosseland_group_opacity_.resize(grid->n_zones);
+     for (int i=0;i<grid->n_zones;i++)
+       rosseland_group_opacity_[i].resize(ddmc_n_groups_);
+     n_grid_variables += ddmc_n_groups_;
+   }
    ddmc_P_up_.resize(grid->n_zones);
    ddmc_P_dn_.resize(grid->n_zones);
    ddmc_P_adv_.resize(grid->n_zones);
@@ -364,6 +382,8 @@ void transport::init(ParameterReader* par, grid_general *g)
    if(verbose){
      std::cout << "# Using diffusion method "<<use_ddmc_<< " with threshold tau = ";
      std::cout << ddmc_tau_ << std::endl;
+     if (ddmc_n_groups_ > 1)
+       std::cout << "# DDMC frequency groups: " << ddmc_n_groups_ << std::endl;
    }
  }
 

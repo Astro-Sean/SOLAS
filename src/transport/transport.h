@@ -192,6 +192,33 @@ class transport
   locate_array randomwalk_x;
   vector<double> randomwalk_Pescape;
 
+  // frequency-group-lumped DDMC: nu_to_group_ maps each transport
+  // frequency bin to a DDMC group; rosseland_group_opacity_[zone][g]
+  // holds the group Rosseland mean. Active only when
+  // ddmc_n_groups_ > 1; otherwise the legacy grey-Rosseland path runs.
+  int ddmc_n_groups_ = 1;
+  vector<int> nu_to_group_;
+  vector< vector<OpacityType> > rosseland_group_opacity_;
+
+  // diffusion opacity governing DDMC membership and leakage for a
+  // packet in frequency bin i_nu of the given zone. With group
+  // lumping this is the packet's group Rosseland mean; with a single
+  // group it falls back to the arguments' frequency-dependent sigma_i
+  // (membership) or the zone Rosseland mean (leakage), preserving the
+  // historical behavior.
+  double ddmc_opacity(int zone, int i_nu, double sigma_i) const
+  {
+    if (ddmc_n_groups_ > 1)
+      return rosseland_group_opacity_[zone][nu_to_group_[i_nu]];
+    return sigma_i;
+  }
+  double ddmc_leak_opacity(int zone, int i_nu) const
+  {
+    if (ddmc_n_groups_ > 1)
+      return rosseland_group_opacity_[zone][nu_to_group_[i_nu]];
+    return rosseland_mean_opacity_[zone];
+  }
+
   // the radiation quantities in the zone
   vector <real> e_rad;
   // line mean intensity

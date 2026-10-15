@@ -17,6 +17,26 @@ VoigtProfile::VoigtProfile()
   rangen_ = gsl_rng_alloc (TypeR);
 }
 
+// rangen_ is owned, so copies must deep-copy the generator state;
+// GasState objects get copied into the LTE state cache and a shallow
+// pointer copy would double-free it at exit.
+VoigtProfile::VoigtProfile(const VoigtProfile& other)
+{
+  u0_  = other.u0_;
+  eu0_ = other.eu0_;
+  rangen_ = gsl_rng_alloc(other.rangen_->type);
+  gsl_rng_memcpy(rangen_, other.rangen_);
+}
+
+VoigtProfile& VoigtProfile::operator=(const VoigtProfile& other)
+{
+  if (this == &other) return *this;
+  u0_  = other.u0_;
+  eu0_ = other.eu0_;
+  gsl_rng_memcpy(rangen_, other.rangen_);
+  return *this;
+}
+
 VoigtProfile::~VoigtProfile() {
   gsl_rng_free(rangen_);
 }

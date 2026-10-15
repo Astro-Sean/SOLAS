@@ -15,6 +15,8 @@ class VoigtProfile
 public:
   
   VoigtProfile();
+  VoigtProfile(const VoigtProfile& other);
+  VoigtProfile& operator=(const VoigtProfile& other);
   ~VoigtProfile();
   void   setU0(double);
   double getProfile(double,double);

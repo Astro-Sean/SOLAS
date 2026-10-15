@@ -162,12 +162,12 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // them anyway with a p.ind hack, costing 2 extra get_opacity
     // calls (locate + 2 interpolations) per diffusion leap.
 
-    // return if no long a DDMC particle
-    // Use frequency-dependent opacity for the DDMC zone check:
-    // a photon enters DDMC only if its frequency-dependent optical
-    // depth exceeds the threshold. This correctly keeps continuum
-    // photons in MC mode even in zones flagged as DDMC by the Planck mean.
-    double ztau = sigma_i * dx;
+    // return if no longer a DDMC particle
+    // With ddmc_n_groups_ > 1 the check uses the packet's group
+    // Rosseland mean, so a line-center packet leaves DDMC when its
+    // group (not its exact bin) is thin. With one group this is the
+    // frequency-dependent sigma_i, as before.
+    double ztau = ddmc_opacity(ii,i_nu,sigma_i) * dx;
     if (ztau <= ddmc_tau_)
     {
       // DDMC -> IMC transition
@@ -186,7 +186,8 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
       return moving;
     }
 
-    // Use Rosseland mean opacity for the LEAKAGE calculation.
+    // Use Rosseland-mean opacity for the LEAKAGE calculation; when
+    // ddmc_n_groups_ > 1 it is the packet's group Rosseland mean.
     // The Rosseland mean is the harmonic mean weighted by dB/dT, which is
     // dominated by continuum opacity windows (low opacity) rather than
     // line peaks. This is the physically correct opacity for diffusion:
@@ -202,11 +203,11 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // which is dominated by the continuum, while the Planck mean weights
     // the arithmetic (kappa) which is dominated by line peaks.
     //
-    // The frequency-dependent sigma_i is still used above for the DDMC
-    // zone check and below for the absorption/scattering tally.
-    double sigma_leak_i    = rosseland_mean_opacity_[ii];
-    double sigma_leak_ip1  = rosseland_mean_opacity_[ip];
-    double sigma_leak_im1  = rosseland_mean_opacity_[im];
+    // The frequency-dependent sigma_i is still used below for the
+    // absorption/scattering tally.
+    double sigma_leak_i    = ddmc_leak_opacity(ii,i_nu);
+    double sigma_leak_ip1  = ddmc_leak_opacity(ip,i_nu);
+    double sigma_leak_im1  = ddmc_leak_opacity(im,i_nu);
 
     // Getting radii at zone boundaries and center
     double rcoords[3];
@@ -484,7 +485,8 @@ int transport::move_across_DDMC_interface(particle &p, int new_ind, double sigma
   double mu = (p.x[0]*p.D[0] + p.x[1]*p.D[1] + p.x[2]*p.D[2]) / rr;
   mu = fabs(mu); // get normal
 
-  double k_p = rosseland_mean_opacity_[new_ind];
+  int i_nu = nu_grid_.locate_within_bounds(p.nu);
+  double k_p = ddmc_leak_opacity(new_ind,i_nu);
   double p_convert;
   // Asymptotic diffusion limit
   // Use Planck mean opacity (k_p) instead of frequency-dependent sigma_i
