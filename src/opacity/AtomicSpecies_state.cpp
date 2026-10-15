@@ -309,7 +309,10 @@ void AtomicSpecies::calculate_radiative_rates(std::vector<real> J_nu)
     //std::cout << j << " " << levels_[j].P_ic << " " << levels_[j].R_ci << "\n";
 
   // calculate line J's
-  double x_max = 5.;
+  // integrate J_nu over the same Doppler-width window used for the
+  // line opacity (line_wing_dnu_), so NLTE radiative rates and the
+  // opacity see the same line support
+  double x_max = line_wing_dnu_;
   double dx    = 0.05;
 
   for (int i=0;i<n_lines_;++i)
