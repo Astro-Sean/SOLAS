@@ -226,12 +226,9 @@ void spectrum_array::count(double t, double w, double E, double *D)
   int m_bin = mu_grid.locate(mu);
   int p_bin = phi_grid.locate(phi);
 
-  // keep all photons, even if off wavelength grid
-  if (l_bin < 0) l_bin = 0;
-  if (l_bin >= wave_grid.size()) l_bin = 0;
-
   // if off the grids, just return without counting
   if ((t_bin < 0)||(l_bin < 0)||(m_bin < 0)||(p_bin < 0)) return;
+  if (l_bin >= wave_grid.size()) return;
   if (t_bin >= time_grid.size()) return;
   if (m_bin >= mu_grid.size())   return;
   if (p_bin >= phi_grid.size())  return;
