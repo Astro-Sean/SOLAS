@@ -62,6 +62,9 @@ public:
   int use_collisions_nlte_;    // use collisional transitions in NLTE solve and heating/cooling
   int use_line_res_scatter_ = 0; // split line opacity into resonance-scattering
                                  // and thermalizing parts by A/(A+C) albedo
+  std::vector<double> lev_rad_out_; // total radiative rate out of each level;
+                                    // competing decays are fluorescence losses
+                                    // for the line albedo, filled lazily
 
   // atomic state values
   int n_ions_;             // Number of ionic stages considered

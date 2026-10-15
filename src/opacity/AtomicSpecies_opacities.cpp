@@ -236,6 +236,16 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
   // zero out arrays
   for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0; res[i] = 0;}
 
+  // total radiative rate out of each level: an absorbed line photon is
+  // also lost when the upper level decays through a different line
+  // (fluorescence), not only when collisions quench it.
+  if (use_line_res_scatter_ && lev_rad_out_.empty())
+  {
+    lev_rad_out_.assign(n_levels_, 0.0);
+    for (int j=0;j<n_lines_;++j)
+      lev_rad_out_[adata_->get_line_u(j)] += adata_->get_line_A(j);
+  }
+
   // Frequency window covered by the grid plus a small margin for
   // Doppler-shifted line wings. Lines outside this cannot contribute
   // to any grid bin, so skipping them early avoids the level lookups
@@ -283,10 +293,10 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     if (alpha_0/(nu_0*nu_0*dnu) < minimum_extinction_) continue;
 
     // resonance-scattering albedo: probability that an absorbed photon
-    // is re-emitted by the same transition instead of collisionally
-    // quenching the upper level. van Regemorter deexcitation rate as in
-    // set_rates; f_lu is floored because the estimate is unreliable
-    // for forbidden lines.
+    // is re-emitted by the same transition instead of being lost to
+    // collisional quenching or a competing radiative decay. van
+    // Regemorter deexcitation rate as in set_rates; f_lu is floored
+    // because the estimate is unreliable for forbidden lines.
     double w_res = 0;
     if (use_line_res_scatter_)
     {
@@ -299,7 +309,7 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
         double effective_f_lu = (f_lu < 1.e-3) ? 1.e-3 : f_lu;
         C_down = 3.9*pow(zeta,-1.)*pow(gas_temp_,-1.5)*ne*effective_f_lu*gl/gu;
       }
-      w_res = A_ul/(A_ul + C_down);
+      w_res = A_ul/(lev_rad_out_[lu] + C_down);
     }
 
     // region to add to -- line_wing_dnu_ doppler widths each side
