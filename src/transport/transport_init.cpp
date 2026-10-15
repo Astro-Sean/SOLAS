@@ -253,7 +253,10 @@ void transport::init(ParameterReader* par, grid_general *g)
     // initialize() since it writes to the per-atom state
     i_gas_state->set_line_wing_dnu(
         params_->getScalar<double>("opacity_line_wing_dnu"));
+    i_gas_state->set_line_res_scatter(
+        params_->getScalar<int>("opacity_line_res_scatter"));
   }
+  use_line_res_scatter_ = params_->getScalar<int>("opacity_line_res_scatter");
   if (verbose) std::cout << "# From fuzzfile \"" << fuzzfile << "\" " <<
        n_fuzzlines << " lines used\n";
   if (verbose) gas_state_vec_[0].print_properties();
@@ -292,6 +295,7 @@ void transport::init(ParameterReader* par, grid_general *g)
 
   abs_opacity_.resize(grid->n_zones);
   if (!omit_scattering_) scat_opacity_.resize(grid->n_zones);
+  if (use_line_res_scatter_) line_res_opacity_.resize(grid->n_zones);
   emissivity_.resize(grid->n_zones);
   J_nu_.resize(grid->n_zones);
   n_freq_variables += 2;
@@ -314,6 +318,10 @@ void transport::init(ParameterReader* par, grid_general *g)
         catch (std::bad_alloc const&) {
             cerr << "Memory allocation fail!" << std::endl; }
     }
+
+    // allocate resonance-line scattering opacity
+    if (use_line_res_scatter_)
+      line_res_opacity_[i].resize(nu_grid_.size());
 
     // allocate emissivity
     emissivity_[i].resize(nu_grid_.size());

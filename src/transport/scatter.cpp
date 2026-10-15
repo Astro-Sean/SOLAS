@@ -9,7 +9,7 @@ namespace pc = physical_constants;
 //------------------------------------------------------------
 // interaction physics
 //------------------------------------------------------------
-ParticleFate transport::do_scatter(particle *p, double eps)
+ParticleFate transport::do_scatter(particle *p, double eps, double res_frac)
 {
   zone *zone = &(grid->z[p->ind]);
   ParticleFate fate = moving;
@@ -22,8 +22,15 @@ ParticleFate transport::do_scatter(particle *p, double eps)
   // do photon interaction physics
   if (p->type == photon)
   {
+    // A fraction res_frac of the total opacity is resonance-line
+    // scattering (the A/(A+C) albedo part of bound-bound opacity).
+    // Those events scatter coherently in the comoving frame: keep nu,
+    // isotropize direction. This is what lets resonance lines form
+    // P-Cygni emission instead of guaranteed absorption troughs.
+    if (res_frac > 0 && rangen.uniform() < res_frac)
+      isotropic_scatter(p,0);
     // see if scattered
-    if (rangen.uniform() > eps)
+    else if (rangen.uniform() > eps/(1.0 - res_frac))
     {
       if (compton_scatter_photons_)
         compton_scatter_photon(p);

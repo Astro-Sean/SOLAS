@@ -17,7 +17,7 @@ namespace pc = physical_constants;
 static locate_array nu_grid;
 static GasState gas;
 static ParameterReader params;
-static std::vector<OpacityType> abs_opacity, scat_opacity, tot_opacity, emissivity;
+static std::vector<OpacityType> abs_opacity, scat_opacity, tot_opacity, emissivity, res_opacity;
 
 // functions
 static double rosseland_mean(std::vector<OpacityType> opac);
@@ -118,6 +118,7 @@ verbose = (my_rank == 0);
   scat_opacity.resize(ng);
   tot_opacity.resize(ng);
   emissivity.resize(ng);
+  res_opacity.resize(ng);
 
   if (verbose) gas.print_properties();
 
@@ -168,14 +169,14 @@ void write_frequency_file(std::string outfile, int style)
       gas.temp_ = *temp;
       gas.dens_ = this_dens;
       gas.solve_state();
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity);
 
       double x;
       for (int i=0;i<nu_grid.size();++i)
       {
         int ind = i;
         if (style == 1) ind = nu_grid.size() - i - 1;
-        tot_opacity[ind] = (abs_opacity[ind] + scat_opacity[ind])/this_dens;
+        tot_opacity[ind] = (abs_opacity[ind] + scat_opacity[ind] + res_opacity[ind])/this_dens;
         if (density_list.size() > 1) fprintf(fout,"%12.5e ",this_dens);
         if (style == 1) x = pc::c/nu_grid[ind]*1e8;
         else x = nu_grid[ind];
@@ -251,10 +252,10 @@ void write_mean_opacities(std::string outfile)
       gas.dens_ = this_dens;
       std::vector<double> J_nu;
       gas.solve_state(J_nu);
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity);
 
       for (int i=0;i<nu_grid.size();++i)
-        tot_opacity[i] = abs_opacity[i] + scat_opacity[i];
+        tot_opacity[i] = abs_opacity[i] + scat_opacity[i] + res_opacity[i];
 
       double kr    = rosseland_mean(tot_opacity);
       double eps_r = rosseland_mean(abs_opacity)/kr;
@@ -321,11 +322,11 @@ void write_mesa_file(std::string mesafile)
       gas.dens_ = this_dens;
       std::vector<double> J_nu;
       gas.solve_state(J_nu);
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity);
 
       for (int i=0;i<nu_grid.size();++i)
       {
-        tot_opacity[i] = abs_opacity[i] + scat_opacity[i];
+        tot_opacity[i] = abs_opacity[i] + scat_opacity[i] + res_opacity[i];
       }
       double kr,kp;
       kr = rosseland_mean(tot_opacity);

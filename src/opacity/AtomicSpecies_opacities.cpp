@@ -220,11 +220,21 @@ double AtomicSpecies::collisional_net_cooling_rate(double ne, double T)
 //---------------------------------------------------------
 // calculate the bound-bound (i.e., line) extinction coefficient
 // (units cm^{-1}) and emissivity for all lines
+//
+// When use_line_res_scatter_ is on, res receives the fraction of
+// each line's opacity that acts as resonance scattering rather than
+// true absorption. The split weight is the single-scattering albedo
+// w = A_ul/(A_ul + C_ul), where C_ul is the van Regemorter
+// collisional deexcitation rate (same estimate used in set_rates).
+// Photons interacting through the res channel must keep their
+// comoving-frame frequency; the rest of the line opacity remains
+// absorptive and thermalizes as before.
 //---------------------------------------------------------
-void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<double>& emis)
+void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<double>& emis,
+                                        std::vector<double>& res, double ne)
 {
   // zero out arrays
-  for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0;}
+  for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0; res[i] = 0;}
 
   // Frequency window covered by the grid plus a small margin for
   // Doppler-shifted line wings. Lines outside this cannot contribute
@@ -272,6 +282,26 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     // don't bother calculating very small opacities
     if (alpha_0/(nu_0*nu_0*dnu) < minimum_extinction_) continue;
 
+    // resonance-scattering albedo: probability that an absorbed photon
+    // is re-emitted by the same transition instead of collisionally
+    // quenching the upper level. van Regemorter deexcitation rate as in
+    // set_rates; f_lu is floored because the estimate is unreliable
+    // for forbidden lines.
+    double w_res = 0;
+    if (use_line_res_scatter_)
+    {
+      double dE = pc::h*nu_0;
+      double zeta = dE/pc::k/gas_temp_;
+      double C_down = 0;
+      if (zeta < 700)
+      {
+        double f_lu = adata_->get_line_f(i);
+        double effective_f_lu = (f_lu < 1.e-3) ? 1.e-3 : f_lu;
+        C_down = 3.9*pow(zeta,-1.)*pow(gas_temp_,-1.5)*ne*effective_f_lu*gl/gu;
+      }
+      w_res = A_ul/(A_ul + C_down);
+    }
+
     // region to add to -- line_wing_dnu_ doppler widths each side
     double nu_1 = nu_0 - dnu*line_wing_dnu_;
     double nu_2 = nu_0 + dnu*line_wing_dnu_;
@@ -286,7 +316,9 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
       double nu = nu_grid_.center(j);
       double x  = (nu_0 - nu)/dnu;
       double phi = voigt_profile_.getProfile(x,a_voigt)/dnu;
-      opac[j] += alpha_0/nu/nu*phi;
+      double a_l = alpha_0/nu/nu*phi;
+      opac[j] += a_l;
+      res[j]  += w_res*a_l;
       emis[j] += line_j*nu*phi;
 
       //if (isnan(alpha_0/nu/nu*phi)) std::cout << alpha_0 << " " << nlow << " " << nup << "\n";

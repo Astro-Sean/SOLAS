@@ -60,6 +60,8 @@ public:
   int no_ground_recomb_;        // suppress recombinations to ground
   bool use_nlte_;               // treat this atom in nlte or not
   int use_collisions_nlte_;    // use collisional transitions in NLTE solve and heating/cooling
+  int use_line_res_scatter_ = 0; // split line opacity into resonance-scattering
+                                 // and thermalizing parts by A/(A+C) albedo
 
   // atomic state values
   int n_ions_;             // Number of ionic stages considered
@@ -101,7 +103,8 @@ public:
   void   bound_free_opacity_for_heating (std::vector<double>&, double,double);
   void   bound_free_opacity_for_cooling (std::vector<double>&, double,double);
   double collisional_net_cooling_rate(double, double);
-  void   bound_bound_opacity(std::vector<double>&, std::vector<double>&);
+  void   bound_bound_opacity(std::vector<double>&, std::vector<double>&,
+                             std::vector<double>&, double);
   void   line_expansion_opacity(std::vector<double>&,double,double);
   void   fuzzline_expansion_opacity(std::vector<double>& opac, double time);
 

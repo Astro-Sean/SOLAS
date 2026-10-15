@@ -169,6 +169,13 @@ class transport
   vector< cdf_array<OpacityType> >    emissivity_;
   vector< vector<OpacityType> >       abs_opacity_;
   vector< vector<OpacityType> >       scat_opacity_;
+  // resonance-line scattering opacity: the A/(A+C) albedo-weighted
+  // part of bound-bound opacity. Photons interacting through this
+  // channel scatter coherently in the comoving frame (keep nu,
+  // isotropize direction) instead of thermalizing. Empty unless
+  // opacity_line_res_scatter is set.
+  vector< vector<OpacityType> >       line_res_opacity_;
+  int use_line_res_scatter_ = 0;
   vector<OpacityType> planck_mean_opacity_;
   vector<OpacityType> rosseland_mean_opacity_;
   vector< vector<real> > J_nu_;
@@ -267,6 +274,7 @@ class transport
 
   // opacity functions
   int   get_opacity(particle&, double, double&, double&);
+  int   get_opacity(particle&, double, double&, double&, double&);
   void   set_opacity(double dt);
   double klein_nishina(double);
   double blackbody_nu(double T, double nu);
@@ -308,7 +316,7 @@ class transport
   int clean_up_particle_vector();
 
   // scattering functions
-  ParticleFate do_scatter(particle*, double);
+  ParticleFate do_scatter(particle*, double, double = 0.0);
   void compton_scatter(particle*);
   void compton_scatter_photon(particle*);
   void isotropic_scatter(particle*, int);

@@ -219,7 +219,7 @@ class GasState
   // OPACITIES AND EMISSIVITIES
   //***********************************************************
   void computeOpacity(std::vector<OpacityType>&, std::vector<OpacityType>&,
-		      std::vector<OpacityType>&);
+		      std::vector<OpacityType>&, std::vector<OpacityType>&);
   double electron_scattering_opacity();
   void free_free_opacity  (std::vector<double>&, std::vector<double>&);
   double free_free_heating_rate(double, std::vector<real>);
@@ -228,8 +228,10 @@ class GasState
   double bound_free_heating_rate (double, std::vector<real>);
   double bound_free_cooling_rate(double);
   double collisional_net_cooling_rate(double);
-  void bound_bound_opacity(std::vector<double>&, std::vector<double>&);
-  void bound_bound_opacity(int, std::vector<double>&, std::vector<double>&);
+  void bound_bound_opacity(std::vector<double>&, std::vector<double>&,
+			   std::vector<double>&);
+  void bound_bound_opacity(int, std::vector<double>&, std::vector<double>&,
+			   std::vector<double>&);
   void line_expansion_opacity(std::vector<double>&,std::vector<double>&);
   void fuzz_expansion_opacity(std::vector<double>&,std::vector<double>&);
   void get_line_opacities(std::vector<double>&);
@@ -245,6 +247,14 @@ class GasState
   void set_line_wing_dnu(double d)
   {
     for (size_t i=0;i<atoms.size();++i) atoms[i].line_wing_dnu_ = d;
+  }
+
+  // route the A/(A+C) scattering fraction of line opacity into a
+  // separate resonance channel (0 = all line opacity thermalizes,
+  // the historical behavior)
+  void set_line_res_scatter(int d)
+  {
+    for (size_t i=0;i<atoms.size();++i) atoms[i].use_line_res_scatter_ = d;
   }
 
   void print_properties();

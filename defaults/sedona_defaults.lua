@@ -144,6 +144,12 @@ line_x_extent               = 100
 opacity_line_wing_dnu       = 5.0  -- line support in Doppler widths;
                                    -- raise to ~20 for strong-line
                                    -- wings (H alpha, He I 10830)
+opacity_line_res_scatter    = 0    -- treat the A/(A+C) albedo fraction
+                                   -- of bound-bound opacity as coherent
+                                   -- comoving-frame resonance scattering
+                                   -- instead of thermalizing absorption;
+                                   -- needed for net line emission
+                                   -- (P-Cygni) in optically thick lines
 
 
 -- output spectrum information
