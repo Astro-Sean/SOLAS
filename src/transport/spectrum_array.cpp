@@ -220,6 +220,10 @@ void spectrum_array::count(double t, double w, double E, double *D)
     phi += 2.*pc::pi;
   }
 
+  // locate() returns 0 both for the first bin and for values below
+  // the grid minimum, so the off-grid check must compare w directly
+  if (w < wave_grid.minval() || w >= wave_grid.maxval()) return;
+
   // locate bin number in all dimensions
   int t_bin = time_grid.locate(t);
   int l_bin = wave_grid.locate(w);
