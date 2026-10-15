@@ -23,7 +23,7 @@ ParticleFate transport::do_scatter(particle *p, double eps, double res_frac)
   if (p->type == photon)
   {
     // A fraction res_frac of the total opacity is resonance-line
-    // scattering (the A/(A+C) albedo part of bound-bound opacity).
+    // scattering (the albedo-weighted part of bound-bound opacity).
     // Those events scatter coherently in the comoving frame: keep nu,
     // isotropize direction. This is what lets resonance lines form
     // P-Cygni emission instead of guaranteed absorption troughs.
