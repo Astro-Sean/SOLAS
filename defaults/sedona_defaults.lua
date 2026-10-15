@@ -133,6 +133,9 @@ opacity_compton_scatter_photons = 0;
 line_velocity_width         = 0
 line_profile                = "voigt"
 line_x_extent               = 100
+opacity_line_wing_dnu       = 5.0  -- line support in Doppler widths;
+                                   -- raise to ~20 for strong-line
+                                   -- wings (H alpha, He I 10830)
 
 
 -- output spectrum information

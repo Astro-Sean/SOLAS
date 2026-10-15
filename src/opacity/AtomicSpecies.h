@@ -53,6 +53,9 @@ public:
   double min_level_pop_;        // the minimum level population allowed
   double minimum_extinction_;   // minimum alpha = 1/mfp to calculate
   double line_beta_dop_;        // doppler width of lines = v/c
+  double line_wing_dnu_ = 5.0;  // line support in Doppler widths; larger
+                                // values keep more Lorentz wing for
+                                // strong lines (H alpha, He I 10830)
   int use_betas_;               // include escape probabilites in nlte
   int no_ground_recomb_;        // suppress recombinations to ground
   bool use_nlte_;               // treat this atom in nlte or not

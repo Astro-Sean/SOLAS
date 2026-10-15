@@ -325,7 +325,7 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
 
       // Step 1: leakage to the neighboring zone
       double dr;
-      double mu, phi, smu;
+      double mu;
 
       if (xi2 <= P_leak_left)  // leak left
       {
@@ -466,19 +466,16 @@ int transport::move_across_DDMC_interface(particle &p, int new_ind, double sigma
   double r_m = rcoords[0]; // inner edge of zone ii
   if (p.ind == 0) {grid->get_r_out_min(&r_m);} // Getting r_out.min
 
-  double r_interface, r_0;
-  if (new_ind == ip)
+  double r_interface;
+  if (new_ind == ip)      r_interface = r_p;
+  else if (new_ind == im) r_interface = r_m;
+  else
   {
-    r_interface = r_p;
-    r_0 = r_interface + 0.5*dr;
+    std::cerr << "transport.cpp: Unknown boundary crossing type!  "\
+              << new_ind << " " << im << " " << ip  << std::endl;
+    return 0; // keep the particle in the MC zone rather than use
+              // uninitialized interface geometry
   }
-  else if (new_ind == im)
-  {
-    r_interface = r_m;
-    r_0 = r_interface - 0.5*dr;
-  }
-  else std::cerr << "transport.cpp: Unknown boundary crossing type!  "\
-                   << new_ind << " " << im << " " << ip  << std::endl;
 
   // Compute IMC-to-DDMC conversion probability
   transform_lab_to_comoving(&p);
@@ -488,9 +485,6 @@ int transport::move_across_DDMC_interface(particle &p, int new_ind, double sigma
   mu = fabs(mu); // get normal
 
   double k_p = rosseland_mean_opacity_[new_ind];
-  double Xi, geo_factor;
-  Xi = 1.0 + dr*dr/(12.0*r_0*r_0);
-  geo_factor = r_interface*r_interface/r_0/r_0/Xi;
   double p_convert;
   // Asymptotic diffusion limit
   // Use Planck mean opacity (k_p) instead of frequency-dependent sigma_i
@@ -512,10 +506,37 @@ int transport::move_across_DDMC_interface(particle &p, int new_ind, double sigma
   {
     p.ind = new_ind;
 
-    grid->sample_in_zone(p.ind,rand,new_r);
-    p.x[0] = new_r[0];
-    p.x[1] = new_r[1];
-    p.x[2] = new_r[2];
+    // Source tilting (Densmore+ / teleportation-error fix): sampling
+    // the conversion point uniformly in the cell overestimates how
+    // deep radiation energy is deposited in optically thick cells.
+    // The diffusion solution with an entering current and a leaky far
+    // boundary is linear in the depth s measured from the entry face:
+    //   phi(s) ~ (dx - s + z_e),  z_e = 2*lambda_ddmc/sigma_leak
+    // For z_e >> dx this is nearly flat (thin cells unaffected); for
+    // thick cells it concentrates the conversion point near the face.
+    double z_e   = 2.0*0.7104/k_p;
+    double s_max = dr;
+    double A     = s_max + z_e;
+    double norm  = A*s_max - 0.5*s_max*s_max;
+    double u1    = rangen.uniform();
+    double disc  = A*A - 2.0*u1*norm;
+    if (disc < 0) disc = 0;
+    double s = A - sqrt(disc);        // smaller root lies in [0,A]
+    if (s > s_max) s = s_max;
+    if (s < 0)     s = 0;
+
+    // depth s into the destination zone from the crossed interface
+    double r_new;
+    if (new_ind == ip) r_new = r_interface + s;   // moving outward
+    else               r_new = r_interface - s;   // moving inward
+
+    // place on the sphere of radius r_new in a random direction
+    double mu_s  = 1.0 - 2.0*rangen.uniform();
+    double phi_s = 2.0*pc::pi*rangen.uniform();
+    double smu_s = sqrt(1.0 - mu_s*mu_s);
+    p.x[0] = r_new*smu_s*cos(phi_s);
+    p.x[1] = r_new*smu_s*sin(phi_s);
+    p.x[2] = r_new*mu_s;
 
     return 1; // no longer transport with MC
   }

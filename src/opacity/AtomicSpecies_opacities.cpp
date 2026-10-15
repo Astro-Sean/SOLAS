@@ -241,9 +241,9 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     double nu_0  = adata_->get_line_nu(i);
     double dnu   = line_beta_dop_*nu_0;
 
-    // line support is +-5*dnu (see below); cheap early-out
-    if (nu_0 + 5.0*dnu < nu_min_win) continue;
-    if (nu_0 - 5.0*dnu > nu_max_win) continue;
+    // line support is +-line_wing_dnu_*dnu (see below); cheap early-out
+    if (nu_0 + line_wing_dnu_*dnu < nu_min_win) continue;
+    if (nu_0 - line_wing_dnu_*dnu > nu_max_win) continue;
 
     int lu  = adata_->get_line_u(i);
     int ll  = adata_->get_line_l(i);
@@ -272,9 +272,9 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     // don't bother calculating very small opacities
     if (alpha_0/(nu_0*nu_0*dnu) < minimum_extinction_) continue;
 
-    // region to add to -- hard code to 20 doppler widths
-    double nu_1 = nu_0 - dnu*5; //*30;
-    double nu_2 = nu_0 + dnu*5; //*30; //debug
+    // region to add to -- line_wing_dnu_ doppler widths each side
+    double nu_1 = nu_0 - dnu*line_wing_dnu_;
+    double nu_2 = nu_0 + dnu*line_wing_dnu_;
     int inu1 = nu_grid_.locate_within_bounds(nu_1);
     int inu2 = nu_grid_.locate_within_bounds(nu_2);
 

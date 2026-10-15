@@ -239,6 +239,11 @@ class GasState
     for (size_t i=0;i<atoms.size();++i) atoms[i].minimum_extinction_ = d;
   }
 
+  void set_line_wing_dnu(double d)
+  {
+    for (size_t i=0;i<atoms.size();++i) atoms[i].line_wing_dnu_ = d;
+  }
+
   void print_properties();
   void print();
   void print_memory_footprint();

@@ -249,6 +249,10 @@ void transport::init(ParameterReader* par, grid_general *g)
     // parameters for treatment of detailed lines
     line_velocity_width_ = params_->getScalar<double>("line_velocity_width");
     i_gas_state->line_velocity_width_ = line_velocity_width_;
+    // line wing extent in Doppler widths; must be set after
+    // initialize() since it writes to the per-atom state
+    i_gas_state->set_line_wing_dnu(
+        params_->getScalar<double>("opacity_line_wing_dnu"));
   }
   if (verbose) std::cout << "# From fuzzfile \"" << fuzzfile << "\" " <<
        n_fuzzlines << " lines used\n";
