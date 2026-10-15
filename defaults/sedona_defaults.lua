@@ -118,6 +118,7 @@ opacity_bound_free          		= 0
 opacity_bound_bound         		= 0
 opacity_free_free           		= 0
 opacity_use_nlte            		= 0
+opacity_nlte_dens_min            = 1e-15  -- minimum density (g/cm^3) for NLTE; below this, fall back to LTE to avoid singular rate matrix
 opacity_atoms_in_nlte       		= {}
 opacity_use_collisions_nlte           	= 1 -- only matters if use_nlte == 1
 opacity_no_ground_recomb                = 0

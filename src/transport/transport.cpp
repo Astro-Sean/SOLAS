@@ -10,6 +10,9 @@
 #include <list>
 #include <algorithm>
 #include <ctime>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #include "transport.h"
 #include "ParameterReader.h"
@@ -50,37 +53,68 @@ void transport::step(double dt)
   tstr = get_system_time();
   emit_particles(dt);
 
+  // Reset DDMC diagnostic counters for this step
+  ddmc_entries_ = 0;
+  ddmc_leaps_ = 0;
+  ddmc_to_imc_ = 0;
+  ddmc_max_leaps_ = 0;
+  ddmc_stuck_ = 0;
+
   // Propagate the particles
   int n_active = particles.size();
   int n_particles = particles.size();
 
-  #pragma omp parallel for schedule(guided)
-  for(int i=0; i<n_particles; i++)
-  {
-    // propagate particles
-    particles[i].fate = propagate(particles[i],dt);
+  // Progress reporting: print at every 10% of particles processed
+  // Use a simple thread-local approach to avoid atomic overhead
+  int progress_interval = (n_particles > 10) ? n_particles / 10 : 1;
+  if (progress_interval < 1) progress_interval = 1;
 
-    // Add escaped photons to output spectrum and escaped particle list
-    if (particles[i].fate == escaped)
+  #pragma omp parallel
+  {
+    int local_count = 0;
+    #pragma omp for schedule(guided)
+    for(int i=0; i<n_particles; i++)
     {
-      // account for light crossing time, relative to grid center
-      double t_obs = particles[i].t - particles[i].x_dot_d()/pc::c;
-      if (particles[i].type == photon)
-        optical_spectrum.count(t_obs,particles[i].nu,particles[i].e,particles[i].D);
-      if (particles[i].type == gammaray)
-        gamma_spectrum.count(t_obs,particles[i].nu,particles[i].e,particles[i].D);
-      particles[i].t = t_obs;
-      if (save_escaped_particles_) {
-#pragma omp critical
+      // propagate particles
+      particles[i].fate = propagate(particles[i],dt);
+      local_count++;
+
+      // Progress reporting every 10% (approximate, per-thread)
+      if (verbose && (local_count % progress_interval == 0)) {
+        #pragma omp critical
         {
-          if (maxn_escaped_particles_ >= particles_escaped.size()) {
-            particles_escaped.push_back(particles[i]);
-          }
-          else {
-            std::cerr << "# WARNING: Escaped particle list exceeds max size " 
-              << maxn_escaped_particles_ << std::endl;
-            std::cerr << "# Clearing escaped particle list on rank " << MPI_myID << std::endl;
-            clearEscapedParticles();
+#ifdef _OPENMP
+          cout << "#   progress (thread " << omp_get_thread_num()
+               << "): " << local_count << " particles processed" << endl;
+#else
+          cout << "#   progress: " << local_count << " particles processed" << endl;
+#endif
+          cout.flush();
+        }
+      }
+
+      // Add escaped photons to output spectrum and escaped particle list
+      if (particles[i].fate == escaped)
+      {
+        // account for light crossing time, relative to grid center
+        double t_obs = particles[i].t - particles[i].x_dot_d()/pc::c;
+        if (particles[i].type == photon)
+          optical_spectrum.count(t_obs,particles[i].nu,particles[i].e,particles[i].D);
+        if (particles[i].type == gammaray)
+          gamma_spectrum.count(t_obs,particles[i].nu,particles[i].e,particles[i].D);
+        particles[i].t = t_obs;
+        if (save_escaped_particles_) {
+#pragma omp critical
+          {
+            if (maxn_escaped_particles_ >= particles_escaped.size()) {
+              particles_escaped.push_back(particles[i]);
+            }
+            else {
+              std::cerr << "# WARNING: Escaped particle list exceeds max size "
+                << maxn_escaped_particles_ << std::endl;
+              std::cerr << "# Clearing escaped particle list on rank " << MPI_myID << std::endl;
+              clearEscapedParticles();
+            }
           }
         }
       }
@@ -112,6 +146,28 @@ void transport::step(double dt)
     else {
       if (verbose)
         cout << "# Percent particles escaped = " << 100.0*per_esc << " (not rescaling)\n";}
+  }
+
+  // DDMC diagnostics: sum counters over MPI ranks and report.  A large
+  // ddmc_leaps_ relative to n_active means particles are executing many
+  // diffusion steps (deep trapping) -- the main DDMC runtime cost.
+  if (use_ddmc_)
+  {
+    long long dd_send[4] = {ddmc_entries_, ddmc_leaps_,
+                            ddmc_to_imc_,  ddmc_stuck_};
+    long long dd_recv[4] = {0, 0, 0, 0};
+    MPI_Allreduce(dd_send, dd_recv, 4, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    long long dd_max = 0;
+    MPI_Allreduce(&ddmc_max_leaps_, &dd_max, 1, MPI_LONG_LONG,
+                  MPI_MAX, MPI_COMM_WORLD);
+    if (verbose)
+    {
+      double avg = (dd_recv[0] > 0) ? (double)dd_recv[1] / dd_recv[0] : 0.0;
+      printf("# DDMC: %lld entries, %lld diffusion steps "
+             "(avg %.0f/entry), %lld back to IMC, max %lld steps, "
+             "%lld particles >1e5 steps\n",
+             dd_recv[0], dd_recv[1], avg, dd_recv[2], dd_max, dd_recv[3]);
+    }
   }
 
   tend = get_system_time();
@@ -233,6 +289,8 @@ ParticleFate transport::propagate(particle &p, double dt)
 
     if (in_ddmc_zone)
     {
+      #pragma omp atomic
+      ddmc_entries_++;
       if(use_ddmc_ == 1)
         fate = discrete_diffuse_IMD(p, tstop);
       else if(use_ddmc_ == 2)

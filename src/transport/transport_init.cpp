@@ -106,6 +106,13 @@ void transport::init(ParameterReader* par, grid_general *g)
   set_Tgas_to_Trad_ = params_->getScalar<int>("transport_set_Tgas_to_Trad");
   last_iteration_ = 0;
 
+  // DDMC diagnostic counters (per-step, reset in transport::step)
+  ddmc_entries_ = 0;
+  ddmc_leaps_ = 0;
+  ddmc_to_imc_ = 0;
+  ddmc_max_leaps_ = 0;
+  ddmc_stuck_ = 0;
+
 
   // set temperature control parameters, check for conflicts
   if (radiative_eq != 0)
@@ -229,6 +236,7 @@ void transport::init(ParameterReader* par, grid_general *g)
 
     // set non-lte settings
     use_nlte_ = params_->getScalar<int>("opacity_use_nlte");
+    nlte_dens_min_ = params_->getScalar<double>("opacity_nlte_dens_min");
     i_gas_state->use_collisions_nlte_ = params_->getScalar<int>("opacity_use_collisions_nlte");
     i_gas_state->no_ground_recomb = params_->getScalar<int>("opacity_no_ground_recomb");
     i_gas_state->initialize(atomic_data_,grid->elems_Z,grid->elems_A,nu_grid_);

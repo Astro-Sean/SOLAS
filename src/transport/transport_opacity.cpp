@@ -95,6 +95,32 @@ void transport::set_opacity(double dt)
       if (gas_state_ptr->temp_ < temp_min_value_) gas_state_ptr->temp_ = temp_min_value_;
       if (gas_state_ptr->temp_ > temp_max_value_) gas_state_ptr->temp_ = temp_max_value_;
 
+      // Compute local |dv/dr| for Sobolev opacity (non-monotonic velocity support).
+      // The standard Sobolev approximation uses 1/t_exp as the velocity gradient,
+      // which is wrong for non-monotonic velocity (e.g., shock interaction).
+      // Here we compute the actual local dv/dr from the grid velocity profile.
+      // For 1D spherical grid, dv/dr = (v[i] - v[i-1]) / (r[i] - r[i-1]).
+      // At velocity extrema (dv/dr ~ 0), fall back to 1/t_exp to avoid
+      // infinite Sobolev depth.
+      {
+        double dvds_sob = 0;
+        double v_this = grid->z[i].v[0];
+        // innermost zone: velocity is extrapolated flat inside rmin
+        // (v_inner_ = z[0].v[0]), so dv/dr = 0 -> fallback to 1/t_exp
+        double v_prev = (i > 0) ? grid->z[i-1].v[0] : v_this;
+        double dr;
+        grid->get_zone_size(i, &dr);
+        if (dr > 0) {
+          dvds_sob = fabs(v_this - v_prev) / dr;
+        }
+        // If dv/dr is too small (near velocity extremum), use 1/t_exp
+        double dvds_homologous = 1.0 / t_now_;
+        if (dvds_sob < 0.1 * dvds_homologous) {
+          dvds_sob = dvds_homologous;
+        }
+        gas_state_ptr->sobolev_dvds_ = dvds_sob;
+      }
+
       // radioactive decay the composition
       for (size_t j=0;j<X_now.size();j++) X_now[j] = z->X_gas[j];
       if (!omit_composition_decay_) {
@@ -105,6 +131,14 @@ void transport::set_opacity(double dt)
 
       gas_state_ptr->bulk_grey_opacity_ = z->bulk_grey_opacity;
       gas_state_ptr->total_grey_opacity_ = z->total_grey_opacity;
+
+      // NLTE density threshold: in low-density zones the rate matrix becomes
+      // singular (collisional rates ~ne -> 0, radiative rates ~J_nu -> 0,
+      // all multiplied by lev_lte_ floored at 1e-30). Fall back to LTE for
+      // zones below nlte_dens_min_ to avoid GSL LU decomposition crash.
+      int nlte_was_on = gas_state_ptr->use_nlte_;
+      if (nlte_was_on && z->rho < nlte_dens_min_)
+        gas_state_ptr->use_nlte_ = 0;
 
       if (first_step_)
       {
@@ -145,6 +179,9 @@ void transport::set_opacity(double dt)
       if(write_levels) gas_state_ptr->write_levels(i);
 
       grid->z[i].n_elec = gas_state_ptr->n_elec_;
+
+      // restore NLTE flag if it was temporarily disabled for low-density zone
+      gas_state_ptr->use_nlte_ = nlte_was_on;
 
       // calculate the opacities/emissivities
       gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis);

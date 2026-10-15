@@ -127,8 +127,14 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
   double dt_remaining = tstop - p.t;
   double dt_hydro = tstop - t_now_;
 
+  // DDMC diagnostics: number of diffusion iterations this particle
+  // executes; folded into the global counters on every exit.
+  long long my_leaps = 0;
+
   while (fate == moving)
   {
+    my_leaps++;
+
     // indices of current and adjacent zones
     int ii = p.ind;
     int ip = ii + 1;
@@ -163,8 +169,50 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     p.ind = ii; // set it back to original index
 
     // return if no long a DDMC particle
+    // Use frequency-dependent opacity for the DDMC zone check:
+    // a photon enters DDMC only if its frequency-dependent optical
+    // depth exceeds the threshold. This correctly keeps continuum
+    // photons in MC mode even in zones flagged as DDMC by the Planck mean.
     double ztau = sigma_i * dx;
-    if (ztau <= ddmc_tau_) {return moving;}
+    if (ztau <= ddmc_tau_)
+    {
+      // DDMC -> IMC transition
+      #pragma omp critical
+      {
+        ddmc_leaps_ += my_leaps;
+        if (my_leaps > ddmc_max_leaps_) ddmc_max_leaps_ = my_leaps;
+      }
+      #pragma omp atomic
+      ddmc_to_imc_++;
+      if (my_leaps > 1e5)
+      {
+        #pragma omp atomic
+        ddmc_stuck_++;
+      }
+      return moving;
+    }
+
+    // Use Rosseland mean opacity for the LEAKAGE calculation.
+    // The Rosseland mean is the harmonic mean weighted by dB/dT, which is
+    // dominated by continuum opacity windows (low opacity) rather than
+    // line peaks. This is the physically correct opacity for diffusion:
+    // photons diffuse through frequency windows where opacity is lowest.
+    // With direct bound-bound (Voigt) line opacity, the frequency-dependent
+    // opacity sigma_i can vary by 4-6 orders of magnitude across frequency
+    // bins (line centers vs continuum). Using sigma_i for the leakage rate
+    // causes photons at line-center frequencies to be trapped forever
+    // (leakage rate ~ 1/sigma_i -> 0 at line centers).
+    //
+    // The Rosseland mean is much lower than the Planck mean when lines
+    // dominate, because the Rosseland mean weights the harmonic (1/kappa)
+    // which is dominated by the continuum, while the Planck mean weights
+    // the arithmetic (kappa) which is dominated by line peaks.
+    //
+    // The frequency-dependent sigma_i is still used above for the DDMC
+    // zone check and below for the absorption/scattering tally.
+    double sigma_leak_i    = rosseland_mean_opacity_[ii];
+    double sigma_leak_ip1  = rosseland_mean_opacity_[ip];
+    double sigma_leak_im1  = rosseland_mean_opacity_[im];
 
     // Getting radii at zone boundaries and center
     double rcoords[3];
@@ -177,27 +225,29 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
 
     // Compute left/right leakage opacity, including the
     // geometric factors for spherical coordinates
+    // Use Planck mean opacity (sigma_leak_*) for leakage rate, NOT the
+    // frequency-dependent sigma_i. See comment above for physics.
     double Xi, geo_factor;
     Xi = 1.0 + dx*dx/(12.0*r_0*r_0);
     geo_factor = r_m*r_m/r_0/r_0/Xi;
-    double tau_im1 = sigma_im1*dxm1;
+    double tau_im1 = sigma_leak_im1*dxm1;
     int ddmc_on_im1 = 1;
     if (tau_im1 <= ddmc_tau_) ddmc_on_im1 = 0;
     double sigma_leak_left;
-    if (ddmc_on_im1) sigma_leak_left  = (2.0/3.0/dx) * (1.0 / (sigma_i*dx + sigma_im1*dxm1)) * geo_factor;
-    else sigma_leak_left  = (2.0/3.0/dx) * (1.0 / (sigma_i*dx + 2.0*lambda_ddmc)) * geo_factor;
+    if (ddmc_on_im1) sigma_leak_left  = (2.0/3.0/dx) * (1.0 / (sigma_leak_i*dx + sigma_leak_im1*dxm1)) * geo_factor;
+    else sigma_leak_left  = (2.0/3.0/dx) * (1.0 / (sigma_leak_i*dx + 2.0*lambda_ddmc)) * geo_factor;
 
     geo_factor = r_p*r_p/r_0/r_0/Xi;
-    double tau_ip1 = sigma_ip1*dxp1;
+    double tau_ip1 = sigma_leak_ip1*dxp1;
     int ddmc_on_ip1 = 1;
     if (tau_ip1 <= ddmc_tau_) ddmc_on_ip1 = 0;
     double sigma_leak_right;
-    if (ddmc_on_ip1) sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_i*dx + sigma_ip1*dxp1)) * geo_factor;
-    else sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_i*dx + 2.0*lambda_ddmc)) * geo_factor;
+    if (ddmc_on_ip1) sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_leak_i*dx + sigma_leak_ip1*dxp1)) * geo_factor;
+    else sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_leak_i*dx + 2.0*lambda_ddmc)) * geo_factor;
 
     // Leakage away from outer boundary of problem domain
     if (ip == ii)
-      {sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_i*dx + 2.0*lambda_ddmc)) * geo_factor;}
+      {sigma_leak_right = (2.0/3.0/dx) * (1.0 / (sigma_leak_i*dx + 2.0*lambda_ddmc)) * geo_factor;}
     // no left leakage in the innermost zone
     if (ii == 0) sigma_leak_left = 0.0;
 
@@ -385,6 +435,17 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
 
   }  // end while(fate == moving)
 
+  #pragma omp critical
+  {
+    ddmc_leaps_ += my_leaps;
+    if (my_leaps > ddmc_max_leaps_) ddmc_max_leaps_ = my_leaps;
+  }
+  if (my_leaps > 1e5)
+  {
+    #pragma omp atomic
+    ddmc_stuck_++;
+  }
+
   return fate;
 }
 
@@ -434,15 +495,18 @@ int transport::move_across_DDMC_interface(particle &p, int new_ind, double sigma
   double mu = (p.x[0]*p.D[0] + p.x[1]*p.D[1] + p.x[2]*p.D[2]) / rr;
   mu = fabs(mu); // get normal
 
-  double k_p = planck_mean_opacity_[new_ind];
+  double k_p = rosseland_mean_opacity_[new_ind];
   double Xi, geo_factor;
   Xi = 1.0 + dr*dr/(12.0*r_0*r_0);
   geo_factor = r_interface*r_interface/r_0/r_0/Xi;
   double p_convert;
   // Asymptotic diffusion limit
-  p_convert = 4.0 * (1.0 + 1.5*mu) / (3.0*sigma_i*dr + 6.0*0.7104);
+  // Use Planck mean opacity (k_p) instead of frequency-dependent sigma_i
+  // for the conversion probability, consistent with the leakage calculation.
+  // See discrete_diffuse_DDMC() for the physics justification.
+  p_convert = 4.0 * (1.0 + 1.5*mu) / (3.0*k_p*dr + 6.0*0.7104);
   // Alternative formalism in Densmore, Evans, and Buksas (2008)
-  //p_convert = 4.0 * (0.91 + 1.635*mu) / (3.0*sigma_i*dr + 6.0*0.7104);
+  //p_convert = 4.0 * (0.91 + 1.635*mu) / (3.0*k_p*dr + 6.0*0.7104);
 
   double xi = rangen.uniform();
   std::vector<double> rand;

@@ -419,7 +419,10 @@ void transport::emit_inner_source(double dt)
       double cost_core  = 1 - 2.0*rangen.uniform();
       double sint_core  = sqrt(1-cost_core*cost_core);
       // real spatial coordinates
-      double a_phot = r_core_ + r_core_*1e-10;
+      // Place photon at 1% into the first zone to avoid floating-point
+      // issues at the inner boundary (r_core may equal rmin, and
+      // r_core*(1+1e-10) may round to rmin, causing get_zone to return -1).
+      double a_phot = r_core_ * 1.01;
       p.x[0] = a_phot*sint_core*cosp_core;
       p.x[1] = a_phot*sint_core*sinp_core;
       p.x[2] = a_phot*cost_core;

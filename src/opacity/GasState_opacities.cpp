@@ -442,7 +442,9 @@ void GasState::line_expansion_opacity
         this_eps = 0;
 
     // have atom calculate the opacity
-    atoms[i].line_expansion_opacity(atom_opac, time_);
+    // Pass local |dv/dr| (sobolev_dvds_) for non-monotonic velocity support.
+    // If sobolev_dvds_ <= 0, the function falls back to 1/time_ (homologous).
+    atoms[i].line_expansion_opacity(atom_opac, time_, sobolev_dvds_);
 
     // store the opacities in place
     for (size_t j=0;j<ng;++j)

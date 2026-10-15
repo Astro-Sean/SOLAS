@@ -21,6 +21,7 @@ GasState::GasState()
   e_gamma = 0;
   no_ground_recomb = 0;
   line_velocity_width_ = 0;
+  sobolev_dvds_ = 0;
 }
 
 //----------------------------------------------------------------

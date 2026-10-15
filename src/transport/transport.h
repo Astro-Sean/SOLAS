@@ -96,6 +96,19 @@ class transport
   int    fix_Tgas_during_transport_;
 
   int use_nlte_;
+  double nlte_dens_min_;  // minimum density for NLTE solve; below this, fall back to LTE
+
+  // DDMC diagnostics: counters accumulated over one transport step.
+  // ddmc_entries_   : number of MC -> DDMC transitions (zone tau > threshold)
+  // ddmc_leaps_     : total DDMC leakage/scatter/stay iterations executed
+  // ddmc_to_imc_    : number of DDMC -> MC transitions (zone tau <= threshold)
+  // ddmc_max_leaps_ : largest number of DDMC iterations for one particle
+  // ddmc_stuck_     : particles needing >1e5 DDMC iterations (near-trapped)
+  long long ddmc_entries_;
+  long long ddmc_leaps_;
+  long long ddmc_to_imc_;
+  long long ddmc_max_leaps_;
+  long long ddmc_stuck_;
 
 
   // current time in simulation

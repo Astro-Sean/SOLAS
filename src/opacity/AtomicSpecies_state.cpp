@@ -8,9 +8,38 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_multiroots.h>
 #include <gsl/gsl_linalg.h>
+#include <gsl/gsl_errno.h>
 #include <iostream>
+#include <signal.h>
 
 using namespace std;
+
+// Custom GSL error handler that sets a flag instead of calling abort().
+// This allows solve_nlte() to detect singular-matrix errors and fall back
+// to LTE populations gracefully.
+static thread_local bool gsl_nlte_error_flag = false;
+static void nlte_gsl_error_handler(const char * reason, const char * file, int line, int gsl_errno)
+{
+  // Check if this is a singularity error (matrix is singular)
+  if (gsl_errno == GSL_ESING || gsl_errno == GSL_EDIVERGE)
+  {
+    gsl_nlte_error_flag = true;
+    return;
+  }
+  // For other errors, fall back to default behavior
+  gsl_nlte_error_flag = true;
+}
+
+// Install the custom handler once at program start
+static bool gsl_handler_installed = false;
+static void install_nlte_gsl_handler()
+{
+  if (!gsl_handler_installed)
+  {
+    gsl_set_error_handler(nlte_gsl_error_handler);
+    gsl_handler_installed = true;
+  }
+}
 
 // ---------------------------------------------------
 // For the NLTE problem, we are solving a matrix equation
@@ -130,6 +159,9 @@ int AtomicSpecies::solve_lte(double ne)
 //-------------------------------------------------------
 int AtomicSpecies::solve_nlte(double ne)
 {
+  // Install custom GSL error handler (once)
+  install_nlte_gsl_handler();
+
   // initialize with LTE populations
   solve_lte(ne);
 
@@ -170,9 +202,25 @@ int AtomicSpecies::solve_nlte(double ne)
     // printf("----\n");
 
   // solve rate matrix
+  gsl_nlte_error_flag = false;
   int status;
   gsl_linalg_LU_decomp(M_nlte_, p_nlte_, &status);
+  if (status != 0 || gsl_nlte_error_flag)
+  {
+    // LU decomposition failed (singular matrix). Fall back to LTE
+    // populations rather than crashing. This happens in low-density
+    // zones where collisional and radiative rates are too small to
+    // constrain the level populations.
+    solve_lte(ne);
+    return 1;
+  }
   gsl_linalg_LU_solve(M_nlte_, p_nlte_, b_nlte_, x_nlte_);
+  if (gsl_nlte_error_flag)
+  {
+    // LU solve failed (singular matrix). Fall back to LTE.
+    solve_lte(ne);
+    return 1;
+  }
 
   // the x vector should now have the solved level
   // depature coefficients

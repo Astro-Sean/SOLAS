@@ -42,6 +42,7 @@ class GasState
   double time_;                  // Time since Explosion (days)
   double e_gamma;                // gamma-ray deposited energy
   double mu_I;                   // // mean atomic/ionic mass (not including free electrons). Dimensionless; needs to be multiplied by amu (~ m_p) to get units of grams
+  double sobolev_dvds_;          // local |dv/dr| (s^-1) for Sobolev opacity; <=0 means use 1/time_
   int no_ground_recomb;          // suppress ground recombinations
 
   // flags for what opacities to use

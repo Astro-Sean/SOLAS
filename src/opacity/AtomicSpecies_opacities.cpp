@@ -329,10 +329,25 @@ void AtomicSpecies::fuzzline_expansion_opacity
 // for lines in the Sobolev expansion opacity formalism
 //---------------------------------------------------------
 void AtomicSpecies::line_expansion_opacity
-(std::vector<double>& opac, double time)
+(std::vector<double>& opac, double time, double dvds_sob)
 {
   // zero out opacity array
   std::fill(opac.begin(),opac.end(),0);
+
+  // Effective Sobolev length: use local |dv/dr| if provided (>0),
+  // otherwise fall back to 1/time (homologous approximation).
+  // For non-monotonic velocity, the local dv/dr gives the correct
+  // Sobolev depth at each zone. Using 1/time overestimates the depth
+  // in decelerating regions and underestimates it in accelerating ones.
+  double sobolev_length;  // = v / |dv/dr| = 1/|dvds_sob|
+  if (dvds_sob > 0)
+  {
+    sobolev_length = 1.0 / dvds_sob;
+  }
+  else
+  {
+    sobolev_length = time;
+  }
 
   // loop over all lines
   for (int i=0;i<n_lines_;++i)
@@ -352,7 +367,9 @@ void AtomicSpecies::line_expansion_opacity
     double nu_0  = adata_->get_line_nu(i);
     double lam   = pc::c/nu_0;
     double f_lu  = adata_->get_line_f(i);
-    double tau   = nl*n_dens_*pc::sigma_tot*f_lu*time*lam;
+    // tau = n_l * sigma_tot * f * L_sob * lambda
+    // where L_sob = 1/|dv/dr| is the Sobolev length
+    double tau   = nl*n_dens_*pc::sigma_tot*f_lu*sobolev_length*lam;
 
     // correction for stimulated emission
     tau = tau*(1 - nu*gl/(nl*gu));
@@ -369,7 +386,8 @@ void AtomicSpecies::line_expansion_opacity
       opac[bin] += (1 - etau);
   }
 
-  // renormalize opacity array
+  // kappa_eff = (1 - exp(-tau)) * nu / (Delta_nu * c * L_sob)
+  // where L_sob = sobolev_length = 1/|dv/dr|
   for (size_t i=0;i<opac.size();i++)
-     opac[i] = opac[i]*nu_grid_.center(i)/nu_grid_.delta(i)/pc::c/time;
+     opac[i] = opac[i]*nu_grid_.center(i)/nu_grid_.delta(i)/pc::c/sobolev_length;
 }

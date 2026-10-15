@@ -13,7 +13,7 @@ namespace pc = physical_constants;
 //------------------------------------------------------------
  double transport::do_dshift(particle* p, int tolab) 
  {
-  assert(p->ind >= 0);
+  if (p->ind < 0) return 0.0;
 
   // get velocity information here
   double v_rel[3], dvds;
@@ -63,7 +63,7 @@ double transport::dshift_comoving_to_lab(particle* p)
 //------------------------------------------------------------
 void transport::transform_lab_to_comoving(particle* p)
 {
-  assert(p->ind >= 0);
+  if (p->ind < 0) return;
   lorentz_transform(p,0);
 }
 
@@ -83,7 +83,7 @@ void transport::transform_comoving_to_lab(particle* p)
 //------------------------------------------------------------
 void transport::lorentz_transform(particle* p, int tolab)
 {
-  assert(p->ind >= 0);
+  if (p->ind < 0) return;
 
   // get velocity information here
   double v_rel[3],dvds;

@@ -83,7 +83,7 @@ void grid_1D_sphere::read_hdf5_file(std::string model_file, ParameterReader* par
   if (status < 0) if (verbose) std::cerr << "# Grid Err; can't find r_min" << endl;
   r_out.setmin(rm[0]);
 
-  v_inner_ = 0.; // just like in .mod case
+  v_inner_ = 0.; // placeholder; set from z[0].v[0] after zones are read
 
   // get grid size and dimensions
   hsize_t dims[2];
@@ -122,6 +122,12 @@ void grid_1D_sphere::read_hdf5_file(std::string model_file, ParameterReader* par
   status = H5LTread_dataset_double(file_id,"/v",tmp);
   if (status < 0) if (verbose) std::cerr << "# Grid Err; can't find v" << endl;
   for (int i=0; i < n_zones; i++) z[i].v[0] = tmp[i];
+
+  // Velocity at the inner boundary: extrapolate the innermost zone's
+  // velocity inward (flat). A hardcoded v_inner_=0 produces an artificial
+  // 0 -> v[0] ramp across zone 0 when the model is truncated in
+  // fast-moving gas, giving a spurious dv/dr at the inner boundary.
+  v_inner_ = z[0].v[0];
   // read erad
   status = H5LTread_dataset_double(file_id,"/erad",tmp);
   if (status < 0)
@@ -292,7 +298,7 @@ void grid_1D_sphere::read_ascii_file(std::string model_file, ParameterReader* pa
   r_out.setmin(rmin);
   this->t_now = texp;
 
-  // set v at inner boundary = 0
+  // v at inner boundary is set after the zone loop (needs z[0].v[0])
   v_inner_ = 0;
 
   // read element isotopes, format is Z.A
@@ -368,6 +374,15 @@ void grid_1D_sphere::read_ascii_file(std::string model_file, ParameterReader* pa
     else     r0 = r_out[i-1];
     vol[i] = 4.0*pc::pi/3.0*(r_out[i]*r_out[i]*r_out[i] - r0*r0*r0);
   }
+
+  // Velocity at the inner boundary.  For "standard" files, extrapolate the
+  // innermost zone's velocity inward (flat): a hardcoded v_inner_=0 gives
+  // an artificial 0 -> v[0] ramp across zone 0 when the model is truncated
+  // in fast-moving gas, producing a spurious dv/dr (and a fake comoving
+  // frequency sweep) at the inner boundary.  For "SNR" files r = v*t, so
+  // v(rmin) = rmin/t_now is the homologous-consistent choice.
+  if (snr) v_inner_ = rmin/t_now;
+  else     v_inner_ = z[0].v[0];
 
 
   // print out properties of the model
