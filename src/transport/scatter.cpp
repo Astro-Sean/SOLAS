@@ -28,7 +28,7 @@ ParticleFate transport::do_scatter(particle *p, double eps, double res_frac)
     // isotropize direction. This is what lets resonance lines form
     // P-Cygni emission instead of guaranteed absorption troughs.
     if (res_frac > 0 && rangen.uniform() < res_frac)
-      isotropic_scatter(p,0);
+      isotropic_scatter(p, (use_line_res_scatter_ == 2) ? 2 : 0);
     // see if scattered
     else if (rangen.uniform() > eps/(1.0 - res_frac))
     {
@@ -334,7 +334,40 @@ void transport::isotropic_scatter(particle *p, int redist)
   D_new[2] = mu;
 
   // choose new wavelength if redistributed
-  if (redist) sample_photon_frequency(p);
+  if (redist == 1) sample_photon_frequency(p);
+  else if (redist == 2)
+  {
+    // Partial redistribution within the line: resample the comoving
+    // frequency from the local resonance-line opacity profile, which
+    // encodes the line shape. Photons diffuse in frequency into the
+    // wings where opacity drops, instead of being locked at line
+    // center -- both more physical than strict comoving coherence
+    // for resonance lines and far less expensive in trapping zones.
+    int nb = nu_grid_.size();
+    int i0 = nu_grid_.locate_within_bounds(p->nu);
+    if (i0 < 0) i0 = 0;
+    if (i0 >= nb) i0 = nb - 1;
+    const vector<OpacityType> &res = line_res_opacity_[p->ind];
+    int lo = i0, hi = i0;
+    double wsum = res[i0];
+    for (int k=1;k<=res_prd_window_ && (i0-k >= 0 || i0+k < nb);k++)
+    {
+      if (i0-k >= 0 && res[i0-k] > 0) {lo = i0-k; wsum += res[lo];}
+      if (i0+k < nb && res[i0+k] > 0) {hi = i0+k; wsum += res[hi];}
+    }
+    if (wsum > 0)
+    {
+      double r = rangen.uniform()*wsum;
+      double acc = 0;
+      int jpick = i0;
+      for (int j=lo;j<=hi;j++)
+      {
+        acc += res[j];
+        if (acc >= r) {jpick = j; break;}
+      }
+      p->nu = nu_grid_.sample(jpick, rangen.uniform());
+    }
+  }
 
   // outgoing velocity vector
   for (int i=0;i<3;i++) V[i] = -1*V[i];

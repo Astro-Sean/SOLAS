@@ -176,6 +176,11 @@ class transport
   // opacity_line_res_scatter is set.
   vector< vector<OpacityType> >       line_res_opacity_;
   int use_line_res_scatter_ = 0;
+  // bin window for line partial redistribution; needs to cover the
+  // line's +-line_wing_dnu Doppler-width support. At a log spacing
+  // of ~5e-4 per bin that is ~60-80 bins; on coarse grids the line
+  // lives in one bin and PRD reduces to comoving coherence.
+  int res_prd_window_ = 80;
   vector<OpacityType> planck_mean_opacity_;
   vector<OpacityType> rosseland_mean_opacity_;
   vector< vector<real> > J_nu_;

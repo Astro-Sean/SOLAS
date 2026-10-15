@@ -145,11 +145,15 @@ opacity_line_wing_dnu       = 5.0  -- line support in Doppler widths;
                                    -- raise to ~20 for strong-line
                                    -- wings (H alpha, He I 10830)
 opacity_line_res_scatter    = 0    -- treat the A/(A+C) albedo fraction
-                                   -- of bound-bound opacity as coherent
-                                   -- comoving-frame resonance scattering
-                                   -- instead of thermalizing absorption;
-                                   -- needed for net line emission
-                                   -- (P-Cygni) in optically thick lines
+                                   -- of bound-bound opacity as resonance
+                                   -- scattering instead of thermalizing
+                                   -- absorption; needed for net line
+                                   -- emission (P-Cygni) in thick lines.
+                                   -- 1 = coherent in the comoving frame
+                                   -- 2 = partial redistribution: resample
+                                   -- nu within the local line profile at
+                                   -- each scatter (recommended; faster
+                                   -- and more accurate for strong lines)
 
 
 -- output spectrum information
