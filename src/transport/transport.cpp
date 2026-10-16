@@ -85,6 +85,7 @@ void transport::step(double dt)
     tl_fr_.assign(ntl, vector<double>(nz_tl, 0.0));
   }
 
+  double e_all_step = 0, e_esc_step = 0;
   #pragma omp parallel
   {
     int tid = tl_tid();
@@ -99,12 +100,13 @@ void transport::step(double dt)
     }
 
     int local_count = 0;
-    #pragma omp for schedule(guided)
+    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step)
     for(int i=0; i<n_particles; i++)
     {
       // propagate particles
       particles[i].fate = propagate(particles[i],dt);
       local_count++;
+      e_all_step += particles[i].e;
 
       // Progress reporting every 10% (approximate, per-thread)
       if (verbose && (local_count % progress_interval == 0)) {
@@ -123,6 +125,7 @@ void transport::step(double dt)
       // Add escaped photons to output spectrum and escaped particle list
       if (particles[i].fate == escaped)
       {
+        e_esc_step += particles[i].e;
         // account for light crossing time, relative to grid center
         double t_obs = particles[i].t - particles[i].x_dot_d()/pc::c;
         if (particles[i].type == photon)
@@ -179,6 +182,12 @@ void transport::step(double dt)
   if (steady_state)
   {
     double per_esc = (1.0*n_escaped)/(1.0*n_active);
+    // With importance-weighted emission the particle count fraction is
+    // not the energy fraction: escaped packets carry small weights, so
+    // a count-based rescale inflates the spectrum by orders of
+    // magnitude. Use the energy fraction whenever flattening is on.
+    if (emit_flatten_ > 0 && e_all_step > 0)
+      per_esc = e_esc_step/e_all_step;
     if (core_fix_luminosity_)
     {
       if (verbose)
