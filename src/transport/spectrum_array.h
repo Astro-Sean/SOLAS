@@ -30,6 +30,11 @@ private:
   // the print method is the total number of clicks over all ranks.
   std::vector<double>    click;
 
+  // escaped packets that landed outside the wave/time grids and were
+  // dropped without being tallied; a large count means the grid does
+  // not cover the escaping radiation
+  double n_dropped_offgrid_;
+
   // Indexing
   int n_elements;
   int a1, a2, a3;

@@ -23,6 +23,7 @@ namespace pc = physical_constants;
 spectrum_array::spectrum_array()
 {
   strcpy(name,DEFAULT_NAME);
+  n_dropped_offgrid_ = 0;
 }
 
 void spectrum_array::set_name(std::string n)
@@ -195,6 +196,7 @@ void spectrum_array::wipe()
     flux[i]   = 0;
     click[i]  = 0;
   }
+  n_dropped_offgrid_ = 0;
 }
 
 
@@ -222,7 +224,12 @@ void spectrum_array::count(double t, double w, double E, double *D)
 
   // locate() returns 0 both for the first bin and for values below
   // the grid minimum, so the off-grid check must compare w directly
-  if (w < wave_grid.minval() || w >= wave_grid.maxval()) return;
+  if (w < wave_grid.minval() || w >= wave_grid.maxval())
+  {
+#pragma omp atomic
+    n_dropped_offgrid_++;
+    return;
+  }
 
   // locate bin number in all dimensions
   int t_bin = time_grid.locate(t);
@@ -231,11 +238,19 @@ void spectrum_array::count(double t, double w, double E, double *D)
   int p_bin = phi_grid.locate(phi);
 
   // if off the grids, just return without counting
-  if ((t_bin < 0)||(l_bin < 0)||(m_bin < 0)||(p_bin < 0)) return;
-  if (l_bin >= wave_grid.size()) return;
-  if (t_bin >= time_grid.size()) return;
-  if (m_bin >= mu_grid.size())   return;
-  if (p_bin >= phi_grid.size())  return;
+  if ((t_bin < 0)||(l_bin < 0)||(m_bin < 0)||(p_bin < 0))
+  {
+#pragma omp atomic
+    n_dropped_offgrid_++;
+    return;
+  }
+  if (l_bin >= wave_grid.size() || t_bin >= time_grid.size() ||
+      m_bin >= mu_grid.size() || p_bin >= phi_grid.size())
+  {
+#pragma omp atomic
+    n_dropped_offgrid_++;
+    return;
+  }
 
   // add to counters
   int ind      = index(t_bin,l_bin,m_bin,p_bin);
@@ -255,8 +270,18 @@ void spectrum_array::print(int suppress_txt = 0)
 {
   // get file name
   char specfile[1000];
-  int mpi_procs;
+  int mpi_procs, mpi_rank;
   MPI_Comm_size( MPI_COMM_WORLD, &mpi_procs );
+  MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank );
+
+  // report how many escaped packets fell outside the tally grids --
+  // a large number means the spectrum is missing real escaping flux
+  double dropped_tot = 0;
+  MPI_Reduce(&n_dropped_offgrid_,&dropped_tot,1,MPI_DOUBLE,MPI_SUM,0,
+      MPI_COMM_WORLD);
+  if (mpi_rank == 0)
+    printf("# %s: %.6g escaped packets landed off the tally grid\n",
+        name, dropped_tot);
 
   int n_times  = this->time_grid.size();
   int n_wave   = this->wave_grid.size();
@@ -414,7 +439,11 @@ void spectrum_array::print(int suppress_txt = 0)
 
 void  spectrum_array::rescale(double r)
 {
-  for (size_t i=0;i<flux.size();i++) flux[i] *= r;
+  for (size_t i=0;i<flux.size();i++)
+  {
+    flux[i]  *= r;
+    click[i] *= r;
+  }
 }
 
 
