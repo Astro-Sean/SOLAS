@@ -32,8 +32,11 @@ private:
 
   // escaped packets that landed outside the wave/time grids and were
   // dropped without being tallied; a large count means the grid does
-  // not cover the escaping radiation
+  // not cover the escaping radiation. n_dropped_offgrid_ is the local
+  // count; dropped_total_ is filled by MPI_average so repeated calls
+  // do not re-sum already reduced values
   double n_dropped_offgrid_;
+  double dropped_total_;
 
   // Indexing
   int n_elements;

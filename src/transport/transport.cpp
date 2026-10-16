@@ -86,6 +86,7 @@ void transport::step(double dt)
   }
 
   double e_all_step = 0, e_esc_step = 0;
+  double e_esc_max = 0, e_emit_max = 0;
   #pragma omp parallel
   {
     int tid = tl_tid();
@@ -100,9 +101,11 @@ void transport::step(double dt)
     }
 
     int local_count = 0;
-    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step)
+    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step) reduction(max:e_esc_max,e_emit_max)
     for(int i=0; i<n_particles; i++)
     {
+      // track the pre-transport packet weight for diagnostics
+      e_emit_max = (particles[i].e > e_emit_max) ? particles[i].e : e_emit_max;
       // propagate particles
       particles[i].fate = propagate(particles[i],dt);
       local_count++;
@@ -126,8 +129,14 @@ void transport::step(double dt)
       if (particles[i].fate == escaped)
       {
         e_esc_step += particles[i].e;
+        if (particles[i].e > e_esc_max) e_esc_max = particles[i].e;
         // account for light crossing time, relative to grid center
         double t_obs = particles[i].t - particles[i].x_dot_d()/pc::c;
+        if (particles[i].e > 1e47)
+        {
+#pragma omp critical
+          printf("# CALLBIG: e=%.3e nu=%.3e\n",particles[i].e,particles[i].nu);
+        }
         if (particles[i].type == photon)
           optical_spectrum.count(t_obs,particles[i].nu,particles[i].e,particles[i].D);
         if (particles[i].type == gammaray)
@@ -191,7 +200,11 @@ void transport::step(double dt)
     if (core_fix_luminosity_)
     {
       if (verbose)
+      {
         cout << "# Percent particles escaped = " << 100.0*per_esc << " (rescaling)\n";
+        printf("# E diag: emitted max=%.3e escaped max=%.3e e_esc=%.3e e_all=%.3e\n",
+            e_emit_max, e_esc_max, e_esc_step, e_all_step);
+      }
 
       double fac = 1.0/per_esc;
       optical_spectrum.rescale(fac);

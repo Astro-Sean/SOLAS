@@ -85,6 +85,10 @@ int sample(const double yval) const
 {
   if (y.size() == 1) return 0;
   int v = upper_bound(y.begin(), y.end(), yval) - y.begin();
+  // upper_bound returns size() when yval >= y.back() (rng returning
+  // exactly 1.0, or a cdf that does not end at 1.0); index size() is
+  // out of bounds, so clamp to the last bin
+  if (v >= (int)y.size()) v = y.size() - 1;
   return v;
 }
 

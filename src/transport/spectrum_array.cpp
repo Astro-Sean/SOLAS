@@ -24,6 +24,7 @@ spectrum_array::spectrum_array()
 {
   strcpy(name,DEFAULT_NAME);
   n_dropped_offgrid_ = 0;
+  dropped_total_ = 0;
 }
 
 void spectrum_array::set_name(std::string n)
@@ -255,6 +256,13 @@ void spectrum_array::count(double t, double w, double E, double *D)
   // add to counters
   int ind      = index(t_bin,l_bin,m_bin,p_bin);
 
+  if (E > 1e47)
+  {
+#pragma omp critical
+    printf("# COUNTBIG: %s E=%.3e w=%.3e t=%.3e ind=%d\n",
+        name, E, w, t, ind);
+  }
+
 #pragma omp atomic
   flux[ind]  += E;
 #pragma omp atomic
@@ -275,13 +283,16 @@ void spectrum_array::print(int suppress_txt = 0)
   MPI_Comm_rank( MPI_COMM_WORLD, &mpi_rank );
 
   // report how many escaped packets fell outside the tally grids --
-  // a large number means the spectrum is missing real escaping flux
-  double dropped_tot = 0;
-  MPI_Reduce(&n_dropped_offgrid_,&dropped_tot,1,MPI_DOUBLE,MPI_SUM,0,
-      MPI_COMM_WORLD);
+  // a large number means the spectrum is missing real escaping flux.
+  // The counter is already MPI-summed by MPI_average(); print() only
+  // runs on rank 0, so no collective call is allowed here.
   if (mpi_rank == 0)
-    printf("# %s: %.6g escaped packets landed off the tally grid\n",
-        name, dropped_tot);
+  {
+    double fsum = 0, csum = 0;
+    for (size_t i=0;i<flux.size();++i) { fsum += flux[i]; csum += click[i]; }
+    printf("# %s: flux_sum=%.3e click_sum=%.3e offgrid=%.6g\n",
+        name, fsum, csum, dropped_total_);
+  }
 
   int n_times  = this->time_grid.size();
   int n_wave   = this->wave_grid.size();
@@ -477,6 +488,15 @@ void spectrum_array::MPI_average()
     for (int i=0;i<n_elements;++i) receive[i] = 0.0;
     MPI_Allreduce(&click.front(), &receive.front(), n_elements, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     click.swap(receive);
+  }
+
+  // total off-grid escapes across ranks; a count, not an average.
+  // Store separately so repeated MPI_average calls do not re-sum.
+  {
+    double dropped_recv = 0;
+    MPI_Allreduce(&n_dropped_offgrid_, &dropped_recv, 1, MPI_DOUBLE,
+        MPI_SUM, MPI_COMM_WORLD);
+    dropped_total_ = dropped_recv;
   }
 
   // only have the receiving ID do the division
