@@ -219,6 +219,7 @@ class GasState
   // OPACITIES AND EMISSIVITIES
   //***********************************************************
   void computeOpacity(std::vector<OpacityType>&, std::vector<OpacityType>&,
+		      std::vector<OpacityType>&, std::vector<OpacityType>&,
 		      std::vector<OpacityType>&, std::vector<OpacityType>&);
   double electron_scattering_opacity();
   void free_free_opacity  (std::vector<double>&, std::vector<double>&);
@@ -229,9 +230,9 @@ class GasState
   double bound_free_cooling_rate(double);
   double collisional_net_cooling_rate(double);
   void bound_bound_opacity(std::vector<double>&, std::vector<double>&,
-			   std::vector<double>&);
+			   std::vector<double>&, std::vector<double>&);
   void bound_bound_opacity(int, std::vector<double>&, std::vector<double>&,
-			   std::vector<double>&);
+			   std::vector<double>&, std::vector<double>&);
   void line_expansion_opacity(std::vector<double>&,std::vector<double>&);
   void fuzz_expansion_opacity(std::vector<double>&,std::vector<double>&);
   void get_line_opacities(std::vector<double>&);

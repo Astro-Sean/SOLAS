@@ -231,10 +231,10 @@ double AtomicSpecies::collisional_net_cooling_rate(double ne, double T)
 // absorptive and thermalizes as before.
 //---------------------------------------------------------
 void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<double>& emis,
-                                        std::vector<double>& res, double ne)
+                                        std::vector<double>& res, std::vector<double>& fluor, double ne)
 {
   // zero out arrays
-  for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0; res[i] = 0;}
+  for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0; res[i] = 0; fluor[i] = 0;}
 
   // total radiative rate out of each level: an absorbed line photon is
   // also lost when the upper level decays through a different line
@@ -292,12 +292,16 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
     // don't bother calculating very small opacities
     if (alpha_0/(nu_0*nu_0*dnu) < minimum_extinction_) continue;
 
-    // resonance-scattering albedo: probability that an absorbed photon
-    // is re-emitted by the same transition instead of being lost to
-    // collisional quenching or a competing radiative decay. van
-    // Regemorter deexcitation rate as in set_rates; f_lu is floored
-    // because the estimate is unreliable for forbidden lines.
-    double w_res = 0;
+    // An absorbed line photon excites the upper level, which then decays
+    // along three routes: back through the same line (resonance
+    // scattering), down a different line (fluorescence), or into thermal
+    // energy by collisional quenching. Only the last route truly
+    // destroys the photon; lumping fluorescence into absorption would
+    // send most of the line energy into the continuum-dominated global
+    // emissivity distribution. van Regemorter deexcitation rate as in
+    // set_rates; f_lu is floored because the estimate is unreliable for
+    // forbidden lines.
+    double w_res = 0, w_fluor = 0;
     if (use_line_res_scatter_)
     {
       double dE = pc::h*nu_0;
@@ -309,7 +313,9 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
         double effective_f_lu = (f_lu < 1.e-3) ? 1.e-3 : f_lu;
         C_down = 3.9*pow(zeta,-1.)*pow(gas_temp_,-1.5)*ne*effective_f_lu*gl/gu;
       }
-      w_res = A_ul/(lev_rad_out_[lu] + C_down);
+      double denom = lev_rad_out_[lu] + C_down;
+      w_res   = A_ul/denom;
+      w_fluor = (lev_rad_out_[lu] - A_ul)/denom;
     }
 
     // region to add to -- line_wing_dnu_ doppler widths each side
@@ -327,9 +333,10 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
       double x  = (nu_0 - nu)/dnu;
       double phi = voigt_profile_.getProfile(x,a_voigt)/dnu;
       double a_l = alpha_0/nu/nu*phi;
-      opac[j] += a_l;
-      res[j]  += w_res*a_l;
-      emis[j] += line_j*nu*phi;
+      opac[j]  += a_l;
+      res[j]   += w_res*a_l;
+      fluor[j] += w_fluor*a_l;
+      emis[j]  += line_j*nu*phi;
 
       //if (isnan(alpha_0/nu/nu*phi)) std::cout << alpha_0 << " " << nlow << " " << nup << "\n";
     //  std::cout << nu_0 << " " << nu-nu_0 << " " << line_j*nu*phi/(alpha_0/nu/nu*phi) << " "

@@ -9,7 +9,8 @@ namespace pc = physical_constants;
 //------------------------------------------------------------
 // interaction physics
 //------------------------------------------------------------
-ParticleFate transport::do_scatter(particle *p, double eps, double res_frac)
+ParticleFate transport::do_scatter(particle *p, double eps, double res_frac,
+                                   double fluor_frac)
 {
   zone *zone = &(grid->z[p->ind]);
   ParticleFate fate = moving;
@@ -22,15 +23,17 @@ ParticleFate transport::do_scatter(particle *p, double eps, double res_frac)
   // do photon interaction physics
   if (p->type == photon)
   {
-    // A fraction res_frac of the total opacity is resonance-line
-    // scattering (the albedo-weighted part of bound-bound opacity).
-    // Those events scatter coherently in the comoving frame: keep nu,
-    // isotropize direction. This is what lets resonance lines form
-    // P-Cygni emission instead of guaranteed absorption troughs.
-    if (res_frac > 0 && rangen.uniform() < res_frac)
+    // Line interactions split by branching fractions: res_frac scatters
+    // coherently (or with PRD) in the same line, fluor_frac re-emits in
+    // a branching line by resampling nu from the zone bound-bound
+    // emissivity. Only the remainder thermalizes.
+    double u_line = rangen.uniform();
+    if (u_line < res_frac)
       isotropic_scatter(p, (use_line_res_scatter_ == 2) ? 2 : 0);
+    else if (u_line < res_frac + fluor_frac)
+      isotropic_scatter(p,3);
     // see if scattered
-    else if (rangen.uniform() > eps/(1.0 - res_frac))
+    else if (rangen.uniform() > eps/(1.0 - res_frac - fluor_frac))
     {
       if (compton_scatter_photons_)
         compton_scatter_photon(p);
@@ -368,6 +371,17 @@ void transport::isotropic_scatter(particle *p, int redist)
       }
       p->nu = nu_grid_.sample(jpick, rangen.uniform());
     }
+  }
+  else if (redist == 3)
+  {
+    // Fluorescence: the excited level decays through a different line.
+    // Transport does not know which transition absorbed the photon, so
+    // the emitted frequency is drawn from the zone bound-bound
+    // emissivity, which weights the branching lines by their actual
+    // radiative rates.
+    int inu = line_emis_cdf_[p->ind].sample(rangen.uniform());
+    if (inu >= nu_grid_.size()) inu = nu_grid_.size() - 1;
+    p->nu = nu_grid_.sample(inu, rangen.uniform());
   }
 
   // outgoing velocity vector

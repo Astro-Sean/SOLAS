@@ -297,7 +297,12 @@ void transport::init(ParameterReader* par, grid_general *g)
 
   abs_opacity_.resize(grid->n_zones);
   if (!omit_scattering_) scat_opacity_.resize(grid->n_zones);
-  if (use_line_res_scatter_) line_res_opacity_.resize(grid->n_zones);
+  if (use_line_res_scatter_)
+  {
+    line_res_opacity_.resize(grid->n_zones);
+    line_fluor_opacity_.resize(grid->n_zones);
+    line_emis_cdf_.resize(grid->n_zones);
+  }
   emissivity_.resize(grid->n_zones);
   if (emit_flatten_ > 0)
   {
@@ -326,9 +331,13 @@ void transport::init(ParameterReader* par, grid_general *g)
             cerr << "Memory allocation fail!" << std::endl; }
     }
 
-    // allocate resonance-line scattering opacity
+    // allocate resonance-line scattering and fluorescence opacity
     if (use_line_res_scatter_)
+    {
       line_res_opacity_[i].resize(nu_grid_.size());
+      line_fluor_opacity_[i].resize(nu_grid_.size());
+      line_emis_cdf_[i].resize(nu_grid_.size());
+    }
 
     // allocate emissivity
     emissivity_[i].resize(nu_grid_.size());

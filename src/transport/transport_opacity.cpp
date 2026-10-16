@@ -32,6 +32,8 @@ void transport::set_opacity(double dt)
   vector<OpacityType> emis(nu_grid_.size());
   vector<OpacityType> scat(nu_grid_.size());
   vector<OpacityType> res(nu_grid_.size());
+  vector<OpacityType> fluor(nu_grid_.size());
+  vector<OpacityType> bb_emis(nu_grid_.size());
   emis.assign(emis.size(),0.0);
 
   // always do LTE on first step
@@ -54,7 +56,10 @@ void transport::set_opacity(double dt)
     {
       abs_opacity_[i][j] = 0;
       if (!omit_scattering_) scat_opacity_[i][j] = 0;
-      if (use_line_res_scatter_) line_res_opacity_[i][j] = 0;
+      if (use_line_res_scatter_) {
+        line_res_opacity_[i][j] = 0;
+        line_fluor_opacity_[i][j] = 0;
+      }
     }
   }
 
@@ -70,7 +75,7 @@ void transport::set_opacity(double dt)
   int solve_root_errors = 0;
   int solve_iter_errors = 0;
 
-#pragma omp parallel firstprivate(emis, scat, res) shared(cerr,solve_root_errors,solve_iter_errors) default(none)
+#pragma omp parallel firstprivate(emis, scat, res, fluor, bb_emis) shared(cerr,solve_root_errors,solve_iter_errors) default(none)
   {
 #ifdef _OPENMP
     int my_threadID = omp_get_thread_num();
@@ -222,7 +227,7 @@ void transport::set_opacity(double dt)
       gas_state_ptr->use_nlte_ = nlte_was_on;
 
       // calculate the opacities/emissivities
-      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res);
+      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res,fluor,bb_emis);
 
       double max_extinction = maximum_opacity_* z->rho;
 
@@ -241,7 +246,11 @@ void transport::set_opacity(double dt)
         emissivity_[i].set_value(j,ednu);
         grid->z[i].L_thermal += 4*pc::pi * ednu;
         if (!omit_scattering_) scat_opacity_[i][j] = scat[j];
-        if (use_line_res_scatter_) line_res_opacity_[i][j] = res[j];
+        if (use_line_res_scatter_) {
+          line_res_opacity_[i][j] = res[j];
+          line_fluor_opacity_[i][j] = fluor[j];
+          line_emis_cdf_[i].set_value(j, bb_emis[j]*nu_grid_.delta(j));
+        }
 
         // check for maximum opacity
         if (!omit_scattering_)
@@ -251,11 +260,16 @@ void transport::set_opacity(double dt)
         }
         if (abs_opacity_[i][j]  > max_extinction)
           abs_opacity_[i][j]    = max_extinction;
-        if (use_line_res_scatter_
-            && line_res_opacity_[i][j] > max_extinction)
-          line_res_opacity_[i][j] = max_extinction;
+        if (use_line_res_scatter_)
+        {
+          if (line_res_opacity_[i][j] > max_extinction)
+            line_res_opacity_[i][j] = max_extinction;
+          if (line_fluor_opacity_[i][j] > max_extinction)
+            line_fluor_opacity_[i][j] = max_extinction;
+        }
       }
       emissivity_[i].normalize();
+      if (use_line_res_scatter_) line_emis_cdf_[i].normalize();
 
       // flattened importance CDF: sample_j = (1-f)*emis_j + f/nbins,
       // weight_j = emis_j/sample_j. Emitted energy is unchanged in the
@@ -296,10 +310,11 @@ void transport::set_opacity(double dt)
           fprintf(ef,"# zone %d call %d  T=%.4g rho=%.3g  L_th=%.3e\n",
               i,call,grid->z[i].T_gas,z->rho,grid->z[i].L_thermal);
           for (int j=0;j<nu_grid_.size();j++)
-            fprintf(ef,"%12.5e %12.5e %12.5e %12.5e %12.5e\n",
+            fprintf(ef,"%12.5e %12.5e %12.5e %12.5e %12.5e %12.5e\n",
                 nu_grid_.center(j), emis[j],
                 abs_opacity_[i][j], scat_opacity_[i][j],
-                use_line_res_scatter_ ? line_res_opacity_[i][j] : 0);
+                use_line_res_scatter_ ? line_res_opacity_[i][j] : 0,
+                use_line_res_scatter_ ? line_fluor_opacity_[i][j] : 0);
           fclose(ef);
         }
       }
@@ -312,7 +327,7 @@ void transport::set_opacity(double dt)
       {
         abs_for_means = abs_opacity_[i];
         for (int j=0;j<nu_grid_.size();j++)
-          abs_for_means[j] += line_res_opacity_[i][j];
+          abs_for_means[j] += line_res_opacity_[i][j] + line_fluor_opacity_[i][j];
       }
       const vector<OpacityType>& abs_mean =
         use_line_res_scatter_ ? abs_for_means : abs_opacity_[i];
@@ -407,15 +422,16 @@ void transport::set_opacity(double dt)
 //-----------------------------------------------------------------
 int transport::get_opacity(particle &p, double dshift, double &opac, double &eps)
 {
-  double res_frac;
-  return get_opacity(p,dshift,opac,eps,res_frac);
+  double res_frac, fluor_frac;
+  return get_opacity(p,dshift,opac,eps,res_frac,fluor_frac);
 }
 
 int transport::get_opacity(particle &p, double dshift, double &opac, double &eps,
-                           double &res_frac)
+                           double &res_frac, double &fluor_frac)
 {
   assert(p.ind >= 0);
   res_frac = 0;
+  fluor_frac = 0;
 
   // comoving frame frequency
   double nu = p.nu*dshift;
@@ -429,15 +445,19 @@ int transport::get_opacity(particle &p, double dshift, double &opac, double &eps
     double a_opac = nu_grid_.value_at(nu,abs_opacity_[p.ind],i_nu);
     double s_opac = 0;
     if (!omit_scattering_) s_opac = nu_grid_.value_at(nu,scat_opacity_[p.ind],i_nu);
-    double l_opac = 0;
+    double l_opac = 0, f_opac = 0;
     if (use_line_res_scatter_)
+    {
       l_opac = nu_grid_.value_at(nu,line_res_opacity_[p.ind],i_nu);
-    opac = a_opac + s_opac + l_opac;
+      f_opac = nu_grid_.value_at(nu,line_fluor_opacity_[p.ind],i_nu);
+    }
+    opac = a_opac + s_opac + l_opac + f_opac;
     if (opac == 0) eps = 0;
     else
     {
-      eps      = a_opac/opac;
-      res_frac = l_opac/opac;
+      eps        = a_opac/opac;
+      res_frac   = l_opac/opac;
+      fluor_frac = f_opac/opac;
     }
   }
 

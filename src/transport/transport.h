@@ -185,6 +185,15 @@ class transport
   // isotropize direction) instead of thermalizing. Empty unless
   // opacity_line_res_scatter is set.
   vector< vector<OpacityType> >       line_res_opacity_;
+  // fluorescence opacity: the part of line absorption where the upper
+  // level decays through a different transition. The photon is re-emitted
+  // in a branching line, so its frequency is resampled from the zone
+  // bound-bound emissivity rather than kept or thermalized.
+  vector< vector<OpacityType> >       line_fluor_opacity_;
+  // per-zone CDF of bound-bound emissivity only; kernel for the
+  // fluorescence frequency resample. Using the total emissivity here
+  // would dump the photons into the UV-dominated continuum.
+  vector< cdf_array<OpacityType> >    line_emis_cdf_;
   int use_line_res_scatter_ = 0;
   // fractional frequency half-width of the PRD redistribution window.
   // Photons resample nu within +-res_prd_dnu_ of the absorbed frequency,
@@ -290,7 +299,7 @@ class transport
 
   // opacity functions
   int   get_opacity(particle&, double, double&, double&);
-  int   get_opacity(particle&, double, double&, double&, double&);
+  int   get_opacity(particle&, double, double&, double&, double&, double&);
   void   set_opacity(double dt);
   double klein_nishina(double);
   double blackbody_nu(double T, double nu);
@@ -334,7 +343,7 @@ class transport
   int clean_up_particle_vector();
 
   // scattering functions
-  ParticleFate do_scatter(particle*, double, double = 0.0);
+  ParticleFate do_scatter(particle*, double, double = 0.0, double = 0.0);
   void compton_scatter(particle*);
   void compton_scatter_photon(particle*);
   void isotropic_scatter(particle*, int);

@@ -106,7 +106,8 @@ ParticleFate transport::discrete_diffuse_IMD(particle &p, double dt)
 // ------------------------------------------------------
 ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
 {
-  enum ParticleEvent {scatter, boundary, tstep, ddmc_res_rescatter};
+  enum ParticleEvent {scatter, boundary, tstep, ddmc_res_rescatter,
+      ddmc_fluor_rescatter};
   ParticleEvent event;
 
   ParticleFate fate = moving;
@@ -153,9 +154,9 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     double sigma_i;
 
     int i_nu;
-    double dshift, eps_i_cmf, res_frac_cmf = 0;
+    double dshift, eps_i_cmf, res_frac_cmf = 0, fluor_frac_cmf = 0;
     dshift = dshift_lab_to_comoving(&p);
-    i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf);
+    i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf,fluor_frac_cmf);
     // Neighbor opacities are not needed: zone checks use the
     // frequency-dependent opacity of this zone only, and leakage
     // rates use the tabulated Rosseland means. The old code fetched
@@ -346,12 +347,24 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
       double tau_res = -1.0*log(rangen.uniform());
       d_res = tau_res/(sigma_i*res_frac_cmf);
     }
+    // Fluorescence is also a frequency event: the absorbed photon comes
+    // back in a branching line at a different frequency. Without it a
+    // DDMC packet absorbed in a line that branches (e.g. Ha -> Lyb)
+    // would keep diffusing at the absorbing frequency forever.
+    double d_fluor = std::numeric_limits<double>::infinity();
+    if (use_line_res_scatter_ == 2 && fluor_frac_cmf > 0.0)
+    {
+      double tau_fluor = -1.0*log(rangen.uniform());
+      d_fluor = tau_fluor/(sigma_i*fluor_frac_cmf);
+    }
     // find out which event actually happens (one with shortest distance)
     double this_d, this_dt;
-    if ((d_sc < d_leak) && (d_sc < d_stay) && (d_sc < d_res))
+    if ((d_sc < d_leak) && (d_sc < d_stay) && (d_sc < d_res) && (d_sc < d_fluor))
       {event = scatter;    this_d = d_sc;}
-    else if ((d_res < d_leak) && (d_res < d_stay))
+    else if ((d_res < d_leak) && (d_res < d_stay) && (d_res < d_fluor))
       {event = ddmc_res_rescatter; this_d = d_res;}
+    else if ((d_fluor < d_leak) && (d_fluor < d_stay))
+      {event = ddmc_fluor_rescatter; this_d = d_fluor;}
     else if (d_leak < d_stay)
       {event = boundary;   this_d = d_leak;}
     else
@@ -381,7 +394,8 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
       {
         fate = do_scatter(&p,1.0);
         dshift = dshift_lab_to_comoving(&p);
-        now_i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf);
+        now_i_nu = get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf,
+            fluor_frac_cmf);
         n_resample++;
       }
     }
@@ -389,7 +403,13 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     {
       fate = do_scatter(&p,0.0,1.0);
       dshift = dshift_lab_to_comoving(&p);
-      get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf);
+      get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf,fluor_frac_cmf);
+    }
+    else if (event == ddmc_fluor_rescatter)
+    {
+      fate = do_scatter(&p,0.0,0.0,1.0);
+      dshift = dshift_lab_to_comoving(&p);
+      get_opacity(p,dshift,sigma_i,eps_i_cmf,res_frac_cmf,fluor_frac_cmf);
     }
     else if (event == tstep)  // Stay in current zone
     {

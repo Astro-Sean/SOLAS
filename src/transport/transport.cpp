@@ -390,8 +390,9 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     // comoving opacity/absorption fraction (epsilon) once -- reused
     // for the DDMC zone check below and the step-size calculation.
     double dshift = dshift_lab_to_comoving(&p);
-    double continuum_opac_cmf, eps_absorb_cmf, res_frac_cmf;
-    int i_nu = get_opacity(p,dshift,continuum_opac_cmf,eps_absorb_cmf,res_frac_cmf);
+    double continuum_opac_cmf, eps_absorb_cmf, res_frac_cmf, fluor_frac_cmf;
+    int i_nu = get_opacity(p,dshift,continuum_opac_cmf,eps_absorb_cmf,res_frac_cmf,
+        fluor_frac_cmf);
     double sigma_i = continuum_opac_cmf;
     double eps_i = eps_absorb_cmf;
     double dr = 0;
@@ -582,7 +583,7 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     //    fate = absorbed;
         //else fate = do_scatter(&p,0);
          // debug
-        fate = do_scatter(&p,eps_absorb_cmf,res_frac_cmf);
+        fate = do_scatter(&p,eps_absorb_cmf,res_frac_cmf,fluor_frac_cmf);
         //if (p.nu*pc::h < pc::rydberg) fate = escaped;
        }
     }
