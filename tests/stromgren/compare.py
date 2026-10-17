@@ -11,8 +11,10 @@ def compare(pdf):
         rbox = 6.6*kpc  
    
         # plot up final structure
-        fin = h5py.File('levels_00010.h5','r')
-        r    = py.array(fin['x'])
+        # level populations are merged into the plot file by
+        # transport::write_levels_to_plotfile under zonedata/<zone>/Z_<Z>
+        fin = h5py.File('plt_00010.h5','r')
+        r    = py.array(fin['r'])
         rmid = r - (r[1] - r[0])
         rho = py.array(fin['rho'])
         nz = len(rho)
@@ -20,7 +22,7 @@ def compare(pdf):
         n1 = py.zeros(nz)
         n2 = py.zeros(nz)
         for i in range(nz):
-                name = 'zone_' + str(i)
+                name = 'zonedata/' + str(i)
                 b = py.array(fin[name + '/Z_1/level_departure'])
                 n = py.array(fin[name + '/Z_1/level_fraction'])
                 n1[i] = n[0]
@@ -53,12 +55,11 @@ def compare(pdf):
         i_arr = py.arange(1,11,1)
         r_arr = py.empty((0))
         for i in i_arr:
-                fname = 'levels_0000' + str(i) + '.h5'
-                if (i > 9): fname = 'levels_000' + str(i) + '.h5'
+                fname = 'plt_%05d.h5' % i
                 fin = h5py.File(fname,'r')
-                r    = py.array(fin['x'])
+                r    = py.array(fin['r'])
                 for j in range(len(r)-1):
-                        name = 'zone_' + str(j)
+                        name = 'zonedata/' + str(j)
                         n = py.array(fin[name + '/Z_1/level_fraction'])
                         if (n[len(n)-1] < 0.5): break
                 fin.close()
