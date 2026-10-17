@@ -40,7 +40,7 @@ void hydro_1D_lagrangian::init(ParameterReader *params, grid_general *g)
   if (boundary_outflow_ == 1 && boundary_rigid_outer_wall_ == 1)
   {
     printf("WARNING!!! Hydro outer boundary cannot be simultaneously outflow and outer wall! Setting to outflow\n");
-    boundary_rigid_outer_wall_ = 1;
+    boundary_rigid_outer_wall_ = 0;
   }
 
   grid->get_radial_edges(r_out_,r_min_,v_out_,v_min_);

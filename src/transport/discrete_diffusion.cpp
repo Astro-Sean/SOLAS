@@ -316,6 +316,12 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // In non-grey RT, we also need to account for physical and
     // effective scattering that could change the particle's frequency.
     double d_sc, k_es_inelastic;
+    // Fraction of absorption opacity that thermalizes (resamples nu).
+    // The inelastic-scatter event rate uses the same factor, so the
+    // continuous absorption tally below must include it to match the
+    // actual packet kill rate. Grey DDMC has no scatter events, so the
+    // tally there is the only deposition channel (inelastic_frac = 1).
+    double inelastic_frac = 1.0;
 
     if (nu_grid_.size() == 1) // no extra scattering for grey case
       {d_sc = std::numeric_limits<double>::infinity();}
@@ -329,7 +335,7 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
         // above; the old code recomputed them here.
         // emissivity_ has been normalized in transport_opacity.cpp
         double elastic_frac = emissivity_[p.ind].get_value(i_nu);
-        double inelastic_frac = 1.0 - elastic_frac;
+        inelastic_frac = 1.0 - elastic_frac;
         k_es_inelastic *= inelastic_frac;
         d_sc = tau_r / k_es_inelastic;
         if (d_sc < 0.0) std::cout << "Negative d_sc!" << std::endl;
@@ -374,11 +380,18 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     dt_remaining -= this_dt;
 
     // tally the contribution of zone's radiation energy
-    // only one factor of dshift above because opacity is in cmf,
-    // just need to covert p.e from lab to cmf.
+    // Absorbed-energy tally matches the IMC convention in
+    // propagate_monte_carlo: two dshift factors (comoving energy times
+    // comoving path length against a comoving opacity), the Fleck
+    // factor eps_imc because only that fraction of absorptions
+    // thermalize, and inelastic_frac because DDMC scatter/absorb
+    // events fire at the inelastic rate k_es_inelastic. Without those
+    // factors the tally overcounted deposition by
+    // 1/(eps_imc*inelastic_frac) and carried a v/c frame error.
     int tid = tl_tid();
-    tl_J_nu0_[tid][p.ind] += p.e*this_d;
-    tl_e_abs_[tid][p.ind] += (p.e*dshift)*this_d*sigma_i*eps_i_cmf;
+    tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift;
+    tl_e_abs_[tid][p.ind] += p.e*this_d*dshift*dshift*sigma_i*eps_i_cmf
+                           *grid->z[ii].eps_imc*inelastic_frac;
 
     // Perform the event with a smaller distance
     if (event == scatter)  // effective scattering

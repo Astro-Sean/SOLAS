@@ -87,6 +87,7 @@ void transport::step(double dt)
 
   double e_all_step = 0, e_esc_step = 0;
   double e_esc_max = 0, e_emit_max = 0;
+  double e_start_step = 0, e_dead_abs = 0, e_abs_step = 0;
   #pragma omp parallel
   {
     int tid = tl_tid();
@@ -101,15 +102,17 @@ void transport::step(double dt)
     }
 
     int local_count = 0;
-    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step) reduction(max:e_esc_max,e_emit_max)
+    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step,e_start_step,e_dead_abs) reduction(max:e_esc_max,e_emit_max)
     for(int i=0; i<n_particles; i++)
     {
       // track the pre-transport packet weight for diagnostics
       e_emit_max = (particles[i].e > e_emit_max) ? particles[i].e : e_emit_max;
+      e_start_step += particles[i].e;
       // propagate particles
       particles[i].fate = propagate(particles[i],dt);
       local_count++;
       e_all_step += particles[i].e;
+      if (particles[i].fate == absorbed) e_dead_abs += particles[i].e;
 
       // Progress reporting every 10% (approximate, per-thread)
       if (verbose && (local_count % progress_interval == 0)) {
@@ -162,7 +165,7 @@ void transport::step(double dt)
     // The omp for above ends with a barrier, so all particles are done.
     // Merge per-thread tallies into the shared zone fields; each zone
     // is handled by exactly one thread, so no atomics are needed.
-    #pragma omp for
+    #pragma omp for reduction(+:e_abs_step)
     for (int z=0; z<nz_tl; z++)
     {
       double ea=0, jn=0, fx=0, fy=0, fz=0, fr=0;
@@ -176,6 +179,7 @@ void transport::step(double dt)
         fr += tl_fr_[t][z];
       }
       grid->z[z].e_abs  += ea;
+      e_abs_step += ea;
       J_nu_[z][0] += jn;
       grid->z[z].fx_rad += fx;
       grid->z[z].fy_rad += fy;
@@ -187,26 +191,58 @@ void transport::step(double dt)
   // Remove escaped and absorbed particles from the particle vector
   int n_escaped = clean_up_particle_vector();
 
+  // Optional energy-closure diagnostic: packet energy in, escaped,
+  // tally-deposited, energy of packets removed by an absorbed fate,
+  // and energy left in census. The tally is a statistical estimator
+  // (absorbed packets are a roulette against it), so the closure
+  // residual is expected to vanish only within MC statistics.
+  if (debug_energy_closure_ && verbose)
+  {
+    double e_resid = 0;
+    for (size_t i=0;i<particles.size();i++) e_resid += particles[i].e;
+    double e_close = e_start_step - e_esc_step - e_dead_abs
+                     - e_resid - e_abs_step;
+    printf("# Energy closure: start=%.4e esc=%.4e abs_tally=%.4e "
+           "dead=%.4e resid=%.4e | residual=%.4e (%.3e frac)\n",
+           e_start_step, e_esc_step, e_abs_step, e_dead_abs, e_resid,
+           e_close, (e_start_step > 0) ? e_close/e_start_step : 0.0);
+  }
+
   // calculate percent particles escaped, and rescale if wanted
   if (steady_state)
   {
-    double per_esc = (1.0*n_escaped)/(1.0*n_active);
+    // The escape fraction must be computed from global counters: each
+    // rank transports an independent full-luminosity ensemble, so a
+    // rank-local per_esc rescales each rank's spectrum by a different
+    // (noisy) factor before the spectra are averaged across ranks.
+    double sc_send[4] = {(double)n_escaped, (double)n_active,
+                         e_esc_step, e_all_step};
+    double sc_recv[4] = {0, 0, 0, 0};
+    MPI_Allreduce(sc_send, sc_recv, 4, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    double m_send[2] = {e_esc_max, e_emit_max}, m_recv[2] = {0, 0};
+    MPI_Allreduce(m_send, m_recv, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    double g_n_esc = sc_recv[0], g_n_act = sc_recv[1];
+    double g_e_esc = sc_recv[2], g_e_all = sc_recv[3];
+
+    double per_esc = (g_n_act > 0) ? g_n_esc/g_n_act : 0.0;
     // With importance-weighted emission the particle count fraction is
     // not the energy fraction: escaped packets carry small weights, so
     // a count-based rescale inflates the spectrum by orders of
     // magnitude. Use the energy fraction whenever flattening is on.
-    if (emit_flatten_ > 0 && e_all_step > 0)
-      per_esc = e_esc_step/e_all_step;
+    if (emit_flatten_ > 0 && g_e_all > 0)
+      per_esc = g_e_esc/g_e_all;
     if (core_fix_luminosity_)
     {
       if (verbose)
       {
         cout << "# Percent particles escaped = " << 100.0*per_esc << " (rescaling)\n";
         printf("# E diag: emitted max=%.3e escaped max=%.3e e_esc=%.3e e_all=%.3e\n",
-            e_emit_max, e_esc_max, e_esc_step, e_all_step);
+            m_recv[1], m_recv[0], g_e_esc, g_e_all);
       }
 
-      double fac = 1.0/per_esc;
+      double fac = (per_esc > 0) ? 1.0/per_esc : 1.0;
+      if (per_esc <= 0 && verbose)
+        cout << "# Warning: no particles escaped; skipping rescale\n";
       optical_spectrum.rescale(fac);
       for (int i=0;i<grid->n_zones;++i)
       {
@@ -445,7 +481,10 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
 
     // check for distance to next frequency bin
     // nushift = nu*(dvds*l)/c --> l = nushift/nu*c/dvds
-    double d_nu = nu_grid_.delta(i_nu)/p.nu*pc::c/p.dvds;
+    // i_nu indexes the *comoving* bin, so the frequency here must be
+    // the comoving nu = p.nu*dshift, not the lab p.nu.
+    double nu_cmf = p.nu*dshift;
+    double d_nu = nu_grid_.delta(i_nu)/nu_cmf*pc::c/p.dvds;
     if (p.dvds == 0) d_nu = std::numeric_limits<double>::infinity();
     if (d_nu < 0) d_nu = -1*d_nu;
     if (d_nu < d_bn)
@@ -503,11 +542,15 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     if (p.type == photon)
     {
       tl_e_abs_[tid][p.ind] += this_E*dshift*(continuum_opac_cmf)*eps_absorb_cmf*dshift * zone->eps_imc;
+      // J_nu / e_rad tallies: convert both packet energy and path
+      // length to the comoving frame (two dshift factors, same
+      // convention as the e_abs tally above) so the J_nu values fed
+      // to the NLTE rates and the LTE e_rad balance are comoving.
       if (store_Jnu_)
 	     #pragma omp atomic
-	      J_nu_[p.ind][i_nu] += this_E;
+	      J_nu_[p.ind][i_nu] += this_E*dshift*dshift;
       else
-        tl_J_nu0_[tid][p.ind] += this_E;
+        tl_J_nu0_[tid][p.ind] += this_E*dshift*dshift;
     }
 
      // tally radiation force

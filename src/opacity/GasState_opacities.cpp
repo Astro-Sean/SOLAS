@@ -603,7 +603,17 @@ double GasState::get_planck_mean
 		mean += W*(abs[i]);
 		norm += W;
 	}
-	mean = mean/norm;
+	// guard the normalizer: on degenerate grids or T -> 0 every
+	// Planck weight can underflow to zero, producing 0/0
+	if (norm > 0) mean = mean/norm;
+	else
+	{
+		if (verbose_)
+			std::cerr << "# Warning: zero Planck weight in get_planck_mean; using unweighted mean" << std::endl;
+		mean = 0;
+		for (size_t i=0;i<nu_grid_.size();i++) mean += abs[i];
+		mean /= nu_grid_.size();
+	}
 	return mean;
 }
 
@@ -639,7 +649,15 @@ double GasState::get_planck_mean(const std::vector<OpacityType>& x)
 		mean += W*x[i];
 		norm += W;
 	}
-	mean = mean/norm;
+	if (norm > 0) mean = mean/norm;
+	else
+	{
+		if (verbose_)
+			std::cerr << "# Warning: zero Planck weight in get_planck_mean; using unweighted mean" << std::endl;
+		mean = 0;
+		for (size_t i=0;i<nu_grid_.size();i++) mean += x[i];
+		mean /= nu_grid_.size();
+	}
 	return mean;
 }
 
@@ -675,10 +693,26 @@ double GasState::get_rosseland_mean
 		double dBdT  = pow(nu,4)*ezeta/(ezeta-1)/(ezeta-1);
 		if (isnan(dBdT)) dBdT = 0;
 		double W = dBdT*nu_grid_.delta(i);
-		mean += W/(abs[i] + scat[i]);
-		norm += W;
+		// skip bins whose total opacity vanishes rather than adding
+		// W/0 = inf into the harmonic sum
+		if (abs[i] + scat[i] > 0)
+		{
+			mean += W/(abs[i] + scat[i]);
+			norm += W;
+		}
 	}
-	mean = norm/mean;
+	if (norm > 0 && mean > 0) mean = norm/mean;
+	else
+	{
+		// all bins had zero total opacity or all weights underflowed:
+		// fall back to the arithmetic mean over nonzero bins
+		if (verbose_)
+			std::cerr << "# Warning: degenerate Rosseland weight; using unweighted mean" << std::endl;
+		double asum = 0; int nbin = 0;
+		for (size_t i=0;i<nu_grid_.size();i++)
+			if (abs[i] + scat[i] > 0) { asum += abs[i] + scat[i]; nbin++; }
+		mean = (nbin > 0) ? asum/nbin : 0.0;
+	}
 	return mean;
 }
 
@@ -767,9 +801,21 @@ double GasState::get_rosseland_mean(const std::vector<OpacityType>& x)
 		double dBdT  = pow(nu,4)*ezeta/(ezeta-1)/(ezeta-1);
 		if (isnan(dBdT)) dBdT = 0;
 		double W = dBdT*nu_grid_.delta(i);
-		mean += W/x[i];
-		norm += W;
+		if (x[i] > 0)
+		{
+			mean += W/x[i];
+			norm += W;
+		}
 	}
-	mean = norm/mean;
+	if (norm > 0 && mean > 0) mean = norm/mean;
+	else
+	{
+		if (verbose_)
+			std::cerr << "# Warning: degenerate Rosseland weight; using unweighted mean" << std::endl;
+		double asum = 0; int nbin = 0;
+		for (size_t i=0;i<nu_grid_.size();i++)
+			if (x[i] > 0) { asum += x[i]; nbin++; }
+		mean = (nbin > 0) ? asum/nbin : 0.0;
+	}
 	return mean;
 }
