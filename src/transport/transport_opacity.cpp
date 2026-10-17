@@ -74,8 +74,10 @@ void transport::set_opacity(double dt)
   tstr = get_system_time();
   int solve_root_errors = 0;
   int solve_iter_errors = 0;
+  int solve_Tbracket_errors = 0;
+  int solve_Titer_errors = 0;
 
-#pragma omp parallel firstprivate(emis, scat, res, fluor, bb_emis) shared(cerr,solve_root_errors,solve_iter_errors) default(none)
+#pragma omp parallel firstprivate(emis, scat, res, fluor, bb_emis) shared(cerr,solve_root_errors,solve_iter_errors,solve_Tbracket_errors,solve_Titer_errors) default(none)
   {
 #ifdef _OPENMP
     int my_threadID = omp_get_thread_num();
@@ -90,7 +92,7 @@ void transport::set_opacity(double dt)
     int solve_error = 0;
 
 
-#pragma omp for
+#pragma omp for reduction(+:solve_Tbracket_errors,solve_Titer_errors)
     for (int i=my_zone_start_;i<my_zone_stop_;i++) {
       // pointer to current zone for easy access
       zone* z = &(grid->z[i]);
@@ -216,6 +218,8 @@ void transport::set_opacity(double dt)
 
       if (solve_error == 1) solve_root_errors += 1;
       if (solve_error == 2) solve_iter_errors += 1;
+      if (solve_error == 3) solve_Tbracket_errors += 1;
+      if (solve_error == 4) solve_Titer_errors += 1;
 
       //gas_state_ptr->print();
       #pragma omp critical
@@ -366,6 +370,10 @@ void transport::set_opacity(double dt)
         std::cerr << "# Warning: root not bracketed in n_e solve in " << solve_root_errors << " zones" << std::endl;
       if (solve_iter_errors != 0) 
         std::cerr << "# Warning: max iterations hit in n_e solve in " << solve_iter_errors << " zones" << std::endl;
+      if (solve_Tbracket_errors != 0)
+        std::cerr << "# Warning: root not bracketed in T solve in " << solve_Tbracket_errors << " zones (kept previous T)" << std::endl;
+      if (solve_Titer_errors != 0)
+        std::cerr << "# Warning: max iterations hit in T solve in " << solve_Titer_errors << " zones (kept previous T)" << std::endl;
     }
   }
   // end OpenMP parallel region

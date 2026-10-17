@@ -49,8 +49,10 @@ int transport::solve_state_and_temperature(GasState* gas_state_ptr, int i)
 
     if (gas_state_ptr->use_nlte_ == 0)
     {
-      // For LTE, do a final solve
-      solve_error = gas_state_ptr->solve_state();
+      // For LTE, do a final solve; do not clobber a temperature-solve
+      // error code with the state-solve result
+      int se_state = gas_state_ptr->solve_state();
+      if (solve_error == 0) solve_error = se_state;
     }
 
     if (gas_state_ptr->use_nlte_)
@@ -233,6 +235,24 @@ double transport::rad_eq_function_NLTE(GasState* gas_state_ptr, int c,double T, 
 // definitions used for temperature solver
 
 #define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
+
+// Count temperature-solve failures and print the first few so silent
+// T_gas corruption can be diagnosed. The counter is process-global and
+// only inspected for messaging; the returned solve_error code is what
+// callers aggregate.
+void transport::report_temp_solve_failure(int cell, double T_kept,
+                                          const char* reason)
+{
+  static long long n_fail = 0;
+  long long my_n;
+#pragma omp critical
+  my_n = ++n_fail;
+  if (verbose && my_n <= 10)
+    fprintf(stderr,
+            "# Warning: T solve failed (%s) in zone %d; keeping T=%.4e\n",
+            reason, cell, T_kept);
+}
+
 double transport::temp_brent_method(GasState* gas_state_ptr, int cell, int solve_flag, int &solve_error)
 {
   double brent_solve_tolerance = 1.0e-2;
@@ -262,8 +282,14 @@ double transport::temp_brent_method(GasState* gas_state_ptr, int cell, int solve
 
   double fc,p,q,r,s,tol1,xm;
 
-  //if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0))
-  //  printf("Root must be bracketed in zbrent");
+  // Brent requires the root bracketed. If it is not, keep the previous
+  // zone temperature rather than returning a garbage iterate or 0.
+  if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0))
+  {
+    report_temp_solve_failure(cell, grid->z[cell].T_gas, "unbracketed");
+    solve_error = 3;
+    return grid->z[cell].T_gas;
+  }
   fc=fb;
   for (iter=1;iter<=ITMAX;iter++) {
     if ((fb > 0.0 && fc > 0.0) || (fb < 0.0 && fc < 0.0)) {
@@ -324,6 +350,9 @@ double transport::temp_brent_method(GasState* gas_state_ptr, int cell, int solve
 	fb=rad_eq_function_NLTE(gas_state_ptr, cell,b,solve_flag,solve_error);
       }
   }
-  printf("Maximum number of iterations exceeded in zbrent");
-  return 0.0;
+  // No convergence in ITMAX iterations: keep the previous zone
+  // temperature instead of writing T_gas = 0.
+  report_temp_solve_failure(cell, grid->z[cell].T_gas, "max iterations");
+  solve_error = 4;
+  return grid->z[cell].T_gas;
 }

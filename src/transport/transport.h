@@ -111,6 +111,10 @@ class transport
   long long ddmc_stuck_;
   long long ddmc_max_leaps_allowed_ = 100000;
 
+  // print per-step energy-closure accounting (start/escaped/tallied/
+  // dead/census) when nonzero; set by debug_energy_closure param
+  int debug_energy_closure_ = 0;
+
 
   // current time in simulation
   double t_now_;
@@ -361,6 +365,8 @@ class transport
   double rad_eq_function_LTE(GasState*, int,double,int, int &);
   double rad_eq_function_NLTE(GasState*, int,double,int, int &);
   double temp_brent_method(GasState*, int,int, int &);
+  void   report_temp_solve_failure(int cell, double T_kept,
+                                   const char* reason);
 
  public:
 
