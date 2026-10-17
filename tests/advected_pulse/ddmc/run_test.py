@@ -98,7 +98,7 @@ def run_test(pdf="",runcommand=""):
     else:
         plt.ion()
         plt.show()
-        j = get_input('Press any key to continue >')
+        j = input('Press any key to continue >')
 
     # this should return !=0 if failed
     return failure
@@ -153,8 +153,11 @@ def get_error(a,b,x=[],x_comp=[],use=[]):
         y_comp = y_comp[use]
     err = abs(y - y_comp)
 
-    max_err = max(err/y_comp)
-    mean_err = np.mean(err)/np.mean(y_comp)
+    # guard zero bins in the comparison curve
+    rel = np.divide(err, y_comp, out=np.zeros_like(err), where=(y_comp != 0))
+    max_err = max(rel)
+    denom = np.mean(y_comp)
+    mean_err = np.mean(err)/denom if denom != 0 else 0.0
 
     return max_err,mean_err
 

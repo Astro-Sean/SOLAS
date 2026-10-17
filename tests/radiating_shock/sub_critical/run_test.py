@@ -47,7 +47,7 @@ def run_test(pdf="",runcommand=""):
         r  = np.array(fin['r'])
         T_gas = np.array(fin['T_gas'])
         T_rad = np.array(fin['T_rad'])
-        print time
+        print(time)
         plt.plot(r,T_gas)
 
 #    for example...

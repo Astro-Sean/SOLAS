@@ -63,7 +63,7 @@ def run_test(pdf="",runcommand=""):
     if (pdf != ''): pdf.savefig()
     else:
         plt.show()
-        j = raw_input()
+        j = input()
 
 
 
@@ -115,7 +115,7 @@ def run_test(pdf="",runcommand=""):
     if (pdf != ''): pdf.savefig()
     else:
         plt.show()
-        j = raw_input()
+        j = input()
 
     # this should return !=0 if failed
     plt.clf()

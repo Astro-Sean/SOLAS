@@ -1,4 +1,8 @@
-defaults_file = "../defaults.lua"
+sedona_home = os.getenv("SEDONA_HOME")
+defaults_file = sedona_home.."/defaults/sedona_defaults.lua"
+-- sedona_defaults.lua points at data/cmfgen_atomdata.hdf5, which is not
+-- shipped; override with the bundled atom_data.hdf5
+data_atomic_file = sedona_home.."/data/atom_data.hdf5"
 grid_type  = "grid_1D_sphere"           -- grid geometry; must match input model
 model_file = "constant_standard.mod"    -- input model file
 
