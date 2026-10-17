@@ -381,6 +381,12 @@ void transport::init(ParameterReader* par, grid_general *g)
  {
    ddmc_tau_ = params_->getScalar<double>("transport_ddmc_tau_threshold");
    ddmc_max_leaps_allowed_ = params_->getScalar<int>("ddmc_max_leaps");
+   ddmc_stuck_method_ = params_->getScalar<int>("ddmc_stuck_method");
+   if (ddmc_stuck_method_ < 0 || ddmc_stuck_method_ > 2)
+   {
+     std::cerr << "# ERROR: ddmc_stuck_method must be 0, 1 or 2" << std::endl;
+     exit(1);
+   }
    ddmc_n_groups_ = params_->getScalar<int>("ddmc_n_groups");
    if (ddmc_n_groups_ < 1) ddmc_n_groups_ = 1;
    if (ddmc_n_groups_ > 1)

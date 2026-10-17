@@ -366,6 +366,9 @@ int transport::clean_up_particle_vector()
 //--------------------------------------------------------
 ParticleFate transport::propagate(particle &p, double dt)
 {
+  // clear any IMC-fallback flag from the previous step
+  p.no_ddmc = 0;
+
   // To be sure, get initial position of the particle
   p.ind = grid->get_zone(p.x);
 
@@ -381,7 +384,7 @@ ParticleFate transport::propagate(particle &p, double dt)
     // check if we are in DDMC zone
     // Generalized to be particle- and frequency-dependent
     int in_ddmc_zone = 0;
-    if (use_ddmc_)
+    if (use_ddmc_ && !p.no_ddmc)
     {
        double sigma_i, dshift, eps_i;
        dshift = dshift_lab_to_comoving(&p);
@@ -449,7 +452,7 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     // check if we have moved into a DDMC zone
     // Instead of using ddmc_use_in_zone_[p.ind] as in the gray case,
     // it is generalized to be particle- and frequency-dependent.
-    if (use_ddmc_)
+    if (use_ddmc_ && !p.no_ddmc)
     {
       grid->get_zone_size(p.ind,&dr);
       double ztau = ddmc_opacity(p.ind,i_nu,sigma_i) * dr;
@@ -464,7 +467,7 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
 
     // Check whether the neighbor is a DDMC zone
     bool new_cell_ddmc = false;
-    if (use_ddmc_ && (new_ind >=0))
+    if (use_ddmc_ && !p.no_ddmc && (new_ind >=0))
     {
        int old_ind = p.ind;
        p.ind = new_ind;

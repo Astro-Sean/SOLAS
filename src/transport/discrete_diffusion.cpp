@@ -181,6 +181,25 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
       #pragma omp atomic
       ddmc_stuck_++;
 
+      if (ddmc_stuck_method_ == 2)
+      {
+        // hold to census: the packet keeps its energy and survives
+        // into the next step where it will try DDMC again. No
+        // artificial early escape, at the cost of extra leaps.
+        p.t = tstop;
+        return stopped;
+      }
+      if (ddmc_stuck_method_ == 1)
+      {
+        // hand the packet to IMC in place: no_ddmc makes the MC
+        // propagator skip every DDMC zone/interface check for the
+        // rest of this step, so it diffuses by real scatter events
+        // instead of being teleported.
+        p.no_ddmc = 1;
+        return moving;
+      }
+
+      // ddmc_stuck_method_ == 0: teleport to the diffusion front
       int j_out = -1;
       double rcoords_out[3];
       for (int j=ii+1;j<nz;j++)
@@ -389,11 +408,7 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // factors the tally overcounted deposition by
     // 1/(eps_imc*inelastic_frac) and carried a v/c frame error.
     int tid = tl_tid();
-<<<<<<< HEAD
-    tl_J_nu0_[tid][p.ind] += p.e*this_d;
-=======
     tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift;
->>>>>>> wo-4-small-fixes
     tl_e_abs_[tid][p.ind] += p.e*this_d*dshift*dshift*sigma_i*eps_i_cmf
                            *grid->z[ii].eps_imc*inelastic_frac;
 
