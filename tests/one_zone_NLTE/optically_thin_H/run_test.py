@@ -64,7 +64,7 @@ def run_test(pdf="",runcommand=""):
     if (pdf != ''): pdf.savefig()
     else:
         plt.show()
-        j = raw_input("Press Return to continue>")
+        j = input("Press Return to continue>")
 
 
 
@@ -99,7 +99,7 @@ def run_test(pdf="",runcommand=""):
     if (pdf != ''): pdf.savefig()
     else:
         plt.show()
-        j = raw_input("Press Return to continue>")
+        j = input("Press Return to continue>")
 
     # this should return !=0 if failed
     return fail_flag

@@ -11,7 +11,7 @@ def run_test(pdf="",runcommand=""):
     # clean up old results and run the code
     ###########################################
     if (runcommand != ""):
-    	os.system("rm *_spectrum_* plt_* integrated_quantities.dat chk*")
+        os.system("rm *_spectrum_* plt_* integrated_quantities.dat chk*")
         # run first ~half and stop
         os.system("cp param_first.lua param.lua")
     #    print (runcommand)

@@ -32,7 +32,7 @@ def compare(pdf):
     if (pdf != ''): pdf.savefig()
     else:
 	    py.show()
-	    j = raw_input()
+	    j = input()
 	
 
 

@@ -122,18 +122,35 @@ for this_test in testlist:
     print("------------------------------------------")
     print("- test " + str(cnt) + ") " + this_test)
 
-    os.system("cp " + exec_dir + executable + " " + this_test)
+    # copy the executable in by fixed name and fail fast: a missing or
+    # failed cp previously went unnoticed and the test ran on a stale
+    # or absent binary
+    exec_src = os.path.join(exec_dir, executable)
+    exec_dst = os.path.join(this_test, executable)
+    if not os.path.isdir(this_test):
+      print("SKIPPED: no such test directory", this_test)
+      total_status += 404
+      continue
+    cp_status = os.system("cp " + exec_src + " " + exec_dst)
+    if cp_status != 0 or not os.path.isfile(exec_dst):
+      print("CRASHED: could not copy executable", exec_src)
+      os.chdir(homedir)
+      total_status += 200
+      cnt += 1
+      continue
     os.chdir(this_test)
 
-    # immport and run script
+    # immport and run script; the import itself can throw (e.g. py2
+    # syntax), so it must live inside the try
     sys.path.append(os.getcwd())
-    import run_test
-    sys.path.remove(os.getcwd())
     try:
+      import run_test
       status = run_test.run_test(pdf,runcommand)
     except:
       status = 200
-    del sys.modules['run_test']
+    sys.path.remove(os.getcwd())
+    if 'run_test' in sys.modules:
+      del sys.modules['run_test']
 
     stoptime = timeit.default_timer()
     print("time = {:.1f} seconds".format(stoptime - starttime))
