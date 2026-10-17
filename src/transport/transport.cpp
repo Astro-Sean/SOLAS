@@ -87,6 +87,7 @@ void transport::step(double dt)
 
   double e_all_step = 0, e_esc_step = 0;
   double e_esc_max = 0, e_emit_max = 0;
+  double e_start_step = 0, e_dead_abs = 0, e_abs_step = 0;
   #pragma omp parallel
   {
     int tid = tl_tid();
@@ -101,15 +102,17 @@ void transport::step(double dt)
     }
 
     int local_count = 0;
-    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step) reduction(max:e_esc_max,e_emit_max)
+    #pragma omp for schedule(guided) reduction(+:e_all_step,e_esc_step,e_start_step,e_dead_abs) reduction(max:e_esc_max,e_emit_max)
     for(int i=0; i<n_particles; i++)
     {
       // track the pre-transport packet weight for diagnostics
       e_emit_max = (particles[i].e > e_emit_max) ? particles[i].e : e_emit_max;
+      e_start_step += particles[i].e;
       // propagate particles
       particles[i].fate = propagate(particles[i],dt);
       local_count++;
       e_all_step += particles[i].e;
+      if (particles[i].fate == absorbed) e_dead_abs += particles[i].e;
 
       // Progress reporting every 10% (approximate, per-thread)
       if (verbose && (local_count % progress_interval == 0)) {
@@ -162,7 +165,7 @@ void transport::step(double dt)
     // The omp for above ends with a barrier, so all particles are done.
     // Merge per-thread tallies into the shared zone fields; each zone
     // is handled by exactly one thread, so no atomics are needed.
-    #pragma omp for
+    #pragma omp for reduction(+:e_abs_step)
     for (int z=0; z<nz_tl; z++)
     {
       double ea=0, jn=0, fx=0, fy=0, fz=0, fr=0;
@@ -176,6 +179,7 @@ void transport::step(double dt)
         fr += tl_fr_[t][z];
       }
       grid->z[z].e_abs  += ea;
+      e_abs_step += ea;
       J_nu_[z][0] += jn;
       grid->z[z].fx_rad += fx;
       grid->z[z].fy_rad += fy;
@@ -186,6 +190,23 @@ void transport::step(double dt)
 
   // Remove escaped and absorbed particles from the particle vector
   int n_escaped = clean_up_particle_vector();
+
+  // Optional energy-closure diagnostic: packet energy in, escaped,
+  // tally-deposited, energy of packets removed by an absorbed fate,
+  // and energy left in census. The tally is a statistical estimator
+  // (absorbed packets are a roulette against it), so the closure
+  // residual is expected to vanish only within MC statistics.
+  if (debug_energy_closure_ && verbose)
+  {
+    double e_resid = 0;
+    for (size_t i=0;i<particles.size();i++) e_resid += particles[i].e;
+    double e_close = e_start_step - e_esc_step - e_dead_abs
+                     - e_resid - e_abs_step;
+    printf("# Energy closure: start=%.4e esc=%.4e abs_tally=%.4e "
+           "dead=%.4e resid=%.4e | residual=%.4e (%.3e frac)\n",
+           e_start_step, e_esc_step, e_abs_step, e_dead_abs, e_resid,
+           e_close, (e_start_step > 0) ? e_close/e_start_step : 0.0);
+  }
 
   // calculate percent particles escaped, and rescale if wanted
   if (steady_state)

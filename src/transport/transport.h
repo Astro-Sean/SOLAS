@@ -111,6 +111,10 @@ class transport
   long long ddmc_stuck_;
   long long ddmc_max_leaps_allowed_ = 100000;
 
+  // print per-step energy-closure accounting (start/escaped/tallied/
+  // dead/census) when nonzero; set by debug_energy_closure param
+  int debug_energy_closure_ = 0;
+
 
   // current time in simulation
   double t_now_;
