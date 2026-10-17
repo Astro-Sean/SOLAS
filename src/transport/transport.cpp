@@ -211,23 +211,38 @@ void transport::step(double dt)
   // calculate percent particles escaped, and rescale if wanted
   if (steady_state)
   {
-    double per_esc = (1.0*n_escaped)/(1.0*n_active);
+    // The escape fraction must be computed from global counters: each
+    // rank transports an independent full-luminosity ensemble, so a
+    // rank-local per_esc rescales each rank's spectrum by a different
+    // (noisy) factor before the spectra are averaged across ranks.
+    double sc_send[4] = {(double)n_escaped, (double)n_active,
+                         e_esc_step, e_all_step};
+    double sc_recv[4] = {0, 0, 0, 0};
+    MPI_Allreduce(sc_send, sc_recv, 4, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    double m_send[2] = {e_esc_max, e_emit_max}, m_recv[2] = {0, 0};
+    MPI_Allreduce(m_send, m_recv, 2, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+    double g_n_esc = sc_recv[0], g_n_act = sc_recv[1];
+    double g_e_esc = sc_recv[2], g_e_all = sc_recv[3];
+
+    double per_esc = (g_n_act > 0) ? g_n_esc/g_n_act : 0.0;
     // With importance-weighted emission the particle count fraction is
     // not the energy fraction: escaped packets carry small weights, so
     // a count-based rescale inflates the spectrum by orders of
     // magnitude. Use the energy fraction whenever flattening is on.
-    if (emit_flatten_ > 0 && e_all_step > 0)
-      per_esc = e_esc_step/e_all_step;
+    if (emit_flatten_ > 0 && g_e_all > 0)
+      per_esc = g_e_esc/g_e_all;
     if (core_fix_luminosity_)
     {
       if (verbose)
       {
         cout << "# Percent particles escaped = " << 100.0*per_esc << " (rescaling)\n";
         printf("# E diag: emitted max=%.3e escaped max=%.3e e_esc=%.3e e_all=%.3e\n",
-            e_emit_max, e_esc_max, e_esc_step, e_all_step);
+            m_recv[1], m_recv[0], g_e_esc, g_e_all);
       }
 
-      double fac = 1.0/per_esc;
+      double fac = (per_esc > 0) ? 1.0/per_esc : 1.0;
+      if (per_esc <= 0 && verbose)
+        cout << "# Warning: no particles escaped; skipping rescale\n";
       optical_spectrum.rescale(fac);
       for (int i=0;i<grid->n_zones;++i)
       {

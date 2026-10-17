@@ -405,6 +405,59 @@ void transport::reduce_opacities()
     }
     MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
     for (int i=0;i<nz;i++) grid->z[i].L_radio_dep = dst_MPI_zones[i]/MPI_nprocs;
+
+    // The division by MPI_nprocs above and below is not a normalization
+    // bug: every rank transports an independent ensemble carrying the
+    // full luminosity budget, so the per-rank tallies are independent
+    // estimates of the same quantity and the Allreduce+mean combines
+    // them correctly. The tallies below were missing that reduction
+    // entirely, leaving each rank on its own noisy estimate.
+
+    // grey radiation energy tally (the band loop above already covers
+    // index 0 when store_Jnu_ is set)
+    if (!store_Jnu_)
+    {
+      for (int i=0;i<nz;i++)
+      {
+        src_MPI_zones[i] = J_nu_[i][0];
+        dst_MPI_zones[i] = 0.0;
+      }
+      MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+      for (int i=0;i<nz;i++) J_nu_[i][0] = dst_MPI_zones[i]/MPI_nprocs;
+    }
+
+    // radiation force tallies
+    for (int i=0;i<nz;i++)
+    {
+      src_MPI_zones[i] = grid->z[i].fr_rad;
+      dst_MPI_zones[i] = 0.0;
+    }
+    MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    for (int i=0;i<nz;i++) grid->z[i].fr_rad = dst_MPI_zones[i]/MPI_nprocs;
+
+    for (int i=0;i<nz;i++)
+    {
+      src_MPI_zones[i] = grid->z[i].fx_rad;
+      dst_MPI_zones[i] = 0.0;
+    }
+    MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    for (int i=0;i<nz;i++) grid->z[i].fx_rad = dst_MPI_zones[i]/MPI_nprocs;
+
+    for (int i=0;i<nz;i++)
+    {
+      src_MPI_zones[i] = grid->z[i].fy_rad;
+      dst_MPI_zones[i] = 0.0;
+    }
+    MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    for (int i=0;i<nz;i++) grid->z[i].fy_rad = dst_MPI_zones[i]/MPI_nprocs;
+
+    for (int i=0;i<nz;i++)
+    {
+      src_MPI_zones[i] = grid->z[i].fz_rad;
+      dst_MPI_zones[i] = 0.0;
+    }
+    MPI_Allreduce(src_MPI_zones,dst_MPI_zones,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+    for (int i=0;i<nz;i++) grid->z[i].fz_rad = dst_MPI_zones[i]/MPI_nprocs;
   }
 #endif
 
