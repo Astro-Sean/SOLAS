@@ -26,7 +26,12 @@ class particle
 
   double   gamma;         // lorentz factor
   double   dshift;        // doppler shift
-  double   dvds;          // directional velocity derivative 
+  double   dvds;          // directional velocity derivative
+
+  // when set, skip all DDMC-zone checks so the packet transports as
+  // IMC for the rest of the step (ddmc_stuck_method = 1). Reset on
+  // every call to propagate(), i.e. at the start of each time step.
+  int      no_ddmc;
 
   ParticleFate fate;
 

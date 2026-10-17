@@ -53,6 +53,13 @@ transport_ddmc_tau_threshold     = 100
 ddmc_max_leaps                   = 100000  -- cap on DDMC diffusion steps per
                                       -- entry; trapped packets are advanced
                                       -- to the diffusion front as MC photons
+ddmc_stuck_method                = 0  -- what to do past the cap:
+                                      -- 0 teleport to diffusion front,
+                                      -- 1 finish step as IMC in place,
+                                      -- 2 hold until census
+debug_energy_closure             = 0  -- print per-step packet energy
+                                      -- accounting (emitted/escaped/
+                                      -- tallied/census) for debugging
 ddmc_n_groups                    = 1  -- >1 enables frequency-group-lumped
                                       -- DDMC: packets leak at their group's
                                       -- Rosseland mean, freeing line-center
