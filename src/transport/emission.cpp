@@ -257,7 +257,12 @@ void transport::emit_thermal(double dt)
     if (pumpup != 0) total_n_emit *= pumpup;
     if (verbose) std::cout << "# last iteration, increasing emission by factor of " << pumpup << "\n";
   }
-  int my_n_emit = total_n_emit/(1.0*MPI_nprocs);
+  int my_n_emit = floor(total_n_emit/(1.0*MPI_nprocs));
+
+  // randomize remainder, same convention as emit_from_radioactive:
+  // without this the packet count is silently truncated per rank
+  double remainder = total_n_emit/(1.0*MPI_nprocs) - my_n_emit;
+  if (rangen.uniform() < remainder) my_n_emit += 1;
 
   // calculate the total thermal emisison energy on the grid
   double E_tot = 0;

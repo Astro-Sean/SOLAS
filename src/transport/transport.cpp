@@ -481,7 +481,10 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
 
     // check for distance to next frequency bin
     // nushift = nu*(dvds*l)/c --> l = nushift/nu*c/dvds
-    double d_nu = nu_grid_.delta(i_nu)/p.nu*pc::c/p.dvds;
+    // i_nu indexes the *comoving* bin, so the frequency here must be
+    // the comoving nu = p.nu*dshift, not the lab p.nu.
+    double nu_cmf = p.nu*dshift;
+    double d_nu = nu_grid_.delta(i_nu)/nu_cmf*pc::c/p.dvds;
     if (p.dvds == 0) d_nu = std::numeric_limits<double>::infinity();
     if (d_nu < 0) d_nu = -1*d_nu;
     if (d_nu < d_bn)
@@ -539,11 +542,15 @@ ParticleFate transport::propagate_monte_carlo(particle &p, double tstop)
     if (p.type == photon)
     {
       tl_e_abs_[tid][p.ind] += this_E*dshift*(continuum_opac_cmf)*eps_absorb_cmf*dshift * zone->eps_imc;
+      // J_nu / e_rad tallies: convert both packet energy and path
+      // length to the comoving frame (two dshift factors, same
+      // convention as the e_abs tally above) so the J_nu values fed
+      // to the NLTE rates and the LTE e_rad balance are comoving.
       if (store_Jnu_)
 	     #pragma omp atomic
-	      J_nu_[p.ind][i_nu] += this_E;
+	      J_nu_[p.ind][i_nu] += this_E*dshift*dshift;
       else
-        tl_J_nu0_[tid][p.ind] += this_E;
+        tl_J_nu0_[tid][p.ind] += this_E*dshift*dshift;
     }
 
      // tally radiation force

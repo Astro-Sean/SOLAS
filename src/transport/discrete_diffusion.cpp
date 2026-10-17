@@ -389,7 +389,11 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // factors the tally overcounted deposition by
     // 1/(eps_imc*inelastic_frac) and carried a v/c frame error.
     int tid = tl_tid();
+<<<<<<< HEAD
     tl_J_nu0_[tid][p.ind] += p.e*this_d;
+=======
+    tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift;
+>>>>>>> wo-4-small-fixes
     tl_e_abs_[tid][p.ind] += p.e*this_d*dshift*dshift*sigma_i*eps_i_cmf
                            *grid->z[ii].eps_imc*inelastic_frac;
 
