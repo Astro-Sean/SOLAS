@@ -45,9 +45,13 @@ private:
     
 public:
 
+  // 0 = drop escaped packets outside the wave grid (counted in
+  // n_dropped_offgrid_); 1 = fold them into the nearest edge bin
+  int offgrid_mode_ = 0;
+
   // constructors
   spectrum_array();
-  
+
   // Initialize
   void init(std::vector<double>,std::vector<double>,int,int);
   void set_name(std::string);

@@ -34,6 +34,7 @@ void transport::set_opacity(double dt)
   vector<OpacityType> res(nu_grid_.size());
   vector<OpacityType> fluor(nu_grid_.size());
   vector<OpacityType> bb_emis(nu_grid_.size());
+  vector<double> res_nu0(nu_grid_.size());
   emis.assign(emis.size(),0.0);
 
   // always do LTE on first step
@@ -77,7 +78,7 @@ void transport::set_opacity(double dt)
   int solve_Tbracket_errors = 0;
   int solve_Titer_errors = 0;
 
-#pragma omp parallel firstprivate(emis, scat, res, fluor, bb_emis) shared(cerr,solve_root_errors,solve_iter_errors,solve_Tbracket_errors,solve_Titer_errors) default(none)
+#pragma omp parallel firstprivate(emis, scat, res, fluor, bb_emis, res_nu0) shared(cerr,solve_root_errors,solve_iter_errors,solve_Tbracket_errors,solve_Titer_errors) default(none)
   {
 #ifdef _OPENMP
     int my_threadID = omp_get_thread_num();
@@ -231,7 +232,7 @@ void transport::set_opacity(double dt)
       gas_state_ptr->use_nlte_ = nlte_was_on;
 
       // calculate the opacities/emissivities
-      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res,fluor,bb_emis);
+      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res,fluor,bb_emis,res_nu0);
 
       double max_extinction = maximum_opacity_* z->rho;
 
@@ -253,6 +254,7 @@ void transport::set_opacity(double dt)
         if (use_line_res_scatter_) {
           line_res_opacity_[i][j] = res[j];
           line_fluor_opacity_[i][j] = fluor[j];
+          res_line_nu0_[i][j] = res_nu0[j];
           line_emis_cdf_[i].set_value(j, bb_emis[j]*nu_grid_.delta(j));
         }
 
@@ -440,6 +442,7 @@ int transport::get_opacity(particle &p, double dshift, double &opac, double &eps
   assert(p.ind >= 0);
   res_frac = 0;
   fluor_frac = 0;
+  p.nu_line = 0;
 
   // comoving frame frequency
   double nu = p.nu*dshift;
@@ -458,6 +461,9 @@ int transport::get_opacity(particle &p, double dshift, double &opac, double &eps
     {
       l_opac = nu_grid_.value_at(nu,line_res_opacity_[p.ind],i_nu);
       f_opac = nu_grid_.value_at(nu,line_fluor_opacity_[p.ind],i_nu);
+      // The dominant resonance line in this bin is what the packet most
+      // likely interacted with; PRD redistribution needs its nu_0.
+      p.nu_line = (l_opac > 0) ? res_line_nu0_[p.ind][i_nu] : 0.0;
     }
     opac = a_opac + s_opac + l_opac + f_opac;
     if (opac == 0) eps = 0;
@@ -466,6 +472,19 @@ int transport::get_opacity(particle &p, double dshift, double &opac, double &eps
       eps        = a_opac/opac;
       res_frac   = l_opac/opac;
       fluor_frac = f_opac/opac;
+      // do_scatter thermalizes with probability eps/(1-res-fluor);
+      // res+fluor must stay below 1-eps or that denominator collapses.
+      // Physically a clamp means the channel bookkeeping, not the total
+      // opacity, was inconsistent, so rescale the pair proportionally.
+      double lim = 1.0 - eps;
+      if (res_frac + fluor_frac > lim)
+      {
+        double sc = lim/(res_frac + fluor_frac);
+        res_frac   *= sc;
+        fluor_frac *= sc;
+#pragma omp atomic
+        res_chan_clamps_++;
+      }
     }
   }
 

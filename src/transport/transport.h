@@ -119,6 +119,10 @@ class transport
   // print per-step energy-closure accounting (start/escaped/tallied/
   // dead/census) when nonzero; set by debug_energy_closure param
   int debug_energy_closure_ = 0;
+  // cumulative packet-energy bookkeeping for the closure diagnostic:
+  // emitted (start-of-step), escaped, absorbed-fate and tally totals
+  double e_cum_start_ = 0, e_cum_esc_ = 0, e_cum_abs_ = 0,
+         e_cum_dead_ = 0;
 
 
   // current time in simulation
@@ -204,12 +208,27 @@ class transport
   // would dump the photons into the UV-dominated continuum.
   vector< cdf_array<OpacityType> >    line_emis_cdf_;
   int use_line_res_scatter_ = 0;
-  // fractional frequency half-width of the PRD redistribution window.
-  // Photons resample nu within +-res_prd_dnu_ of the absorbed frequency,
-  // weighted by the local line-resonance opacity. A few thermal/bulk
-  // Doppler widths wide, so photons diffuse into the wings but cannot
-  // hop to unrelated lines -- independent of grid spacing.
+  // rest frequency of the dominant resonance-contributing line in each
+  // (zone, bin), set by the opacity pass. PRD redistribution samples
+  // the outgoing detuning around this nu_0 (Hummer RII-style), not
+  // around the incoming frequency.
+  vector< vector<double> >            res_line_nu0_;
+  // fractional frequency half-width of the PRD redistribution window
+  // around nu_0. The window only limits which bins the sampling loop
+  // visits; the actual support is the line profile itself, so values
+  // larger than the local line width are harmless.
   double res_prd_dnu_ = 0.02;
+  // recoherence probability for PRD: with this probability a resonantly
+  // scattered photon is re-emitted exactly at the line rest frequency
+  // instead of being drawn from the line profile (the coherent branch
+  // of Hummer RII). 0 = complete redistribution over the profile.
+  double res_prd_recoherence_ = 0.0;
+  // counts get_opacity calls where the resonance+fluorescence fractions
+  // had to be clamped because they exceeded the non-thermal share
+  long long res_chan_clamps_ = 0;
+  // trailing EMA of the steady-state escape rescale factor, so a single
+  // noisy iteration does not jitter the output spectrum
+  double rescale_fac_ema_ = 0;
   vector<OpacityType> planck_mean_opacity_;
   vector<OpacityType> rosseland_mean_opacity_;
   vector< vector<real> > J_nu_;

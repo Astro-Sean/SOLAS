@@ -178,6 +178,9 @@ void transport::init(ParameterReader* par, grid_general *g)
     optical_spectrum.init(stg,sng,nmu,nphi);
     std::vector<double>gng = params_->getVector<double>("gamma_nu_grid");
     gamma_spectrum.init(stg,sng,nmu,nphi);
+    int offgrid_mode = params_->getScalar<int>("spectrum_offgrid_mode");
+    optical_spectrum.offgrid_mode_ = offgrid_mode;
+    gamma_spectrum.offgrid_mode_   = offgrid_mode;
   }
   escaped_particle_filename_ = params_->getScalar<string>("spectrum_particle_list_name");
   if (escaped_particle_filename_ == "")
@@ -258,6 +261,7 @@ void transport::init(ParameterReader* par, grid_general *g)
   }
   use_line_res_scatter_ = params_->getScalar<int>("opacity_line_res_scatter");
   res_prd_dnu_ = params_->getScalar<double>("opacity_line_prd_dnu");
+  res_prd_recoherence_ = params_->getScalar<double>("opacity_line_prd_recoherence");
   emit_flatten_ = params_->getScalar<double>("particles_emit_flatten");
   if (verbose) std::cout << "# From fuzzfile \"" << fuzzfile << "\" " <<
        n_fuzzlines << " lines used\n";
@@ -302,6 +306,7 @@ void transport::init(ParameterReader* par, grid_general *g)
     line_res_opacity_.resize(grid->n_zones);
     line_fluor_opacity_.resize(grid->n_zones);
     line_emis_cdf_.resize(grid->n_zones);
+    res_line_nu0_.resize(grid->n_zones);
   }
   emissivity_.resize(grid->n_zones);
   if (emit_flatten_ > 0)
@@ -337,6 +342,7 @@ void transport::init(ParameterReader* par, grid_general *g)
       line_res_opacity_[i].resize(nu_grid_.size());
       line_fluor_opacity_[i].resize(nu_grid_.size());
       line_emis_cdf_[i].resize(nu_grid_.size());
+      res_line_nu0_[i].assign(nu_grid_.size(), 0.0);
     }
 
     // allocate emissivity
@@ -542,6 +548,11 @@ void transport::setup_core_emission()
   L_core_         = params_->getFunction("core_luminosity", 0);
   time_core_      = params_->getScalar<double>("core_timescale");
   core_fix_luminosity_ = params_->getScalar<int>("core_fix_luminosity");
+  // the rescale only exists in steady-iterate mode; warn if a
+  // time-dependent run sets it so the param does not silently do nothing
+  if (core_fix_luminosity_ && !steady_state)
+    std::cerr << "# WARNING: core_fix_luminosity has no effect outside "
+              << "transport_steady_iterate mode\n";
 
   // set blackbody from L and R if appropriate
   if ((L_core_ !=0)&&(r_core_ != 0)&&(T_core_ == 0))

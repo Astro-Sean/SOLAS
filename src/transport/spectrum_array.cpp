@@ -225,16 +225,25 @@ void spectrum_array::count(double t, double w, double E, double *D)
 
   // locate() returns 0 both for the first bin and for values below
   // the grid minimum, so the off-grid check must compare w directly
+  int l_forced = -1;
   if (w < wave_grid.minval() || w >= wave_grid.maxval())
   {
+    // offgrid_mode_ = 1 folds escaped packets into the nearest edge
+    // bin so the total flux stays correct; the spectral shape at the
+    // edge then carries the missing flux as a spike
+    if (offgrid_mode_ == 1)
+      l_forced = (w < wave_grid.minval()) ? 0 : wave_grid.size() - 1;
+    else
+    {
 #pragma omp atomic
-    n_dropped_offgrid_++;
-    return;
+      n_dropped_offgrid_++;
+      return;
+    }
   }
 
   // locate bin number in all dimensions
   int t_bin = time_grid.locate(t);
-  int l_bin = wave_grid.locate(w);
+  int l_bin = (l_forced >= 0) ? l_forced : wave_grid.locate(w);
   int m_bin = mu_grid.locate(mu);
   int p_bin = phi_grid.locate(phi);
 
@@ -290,8 +299,14 @@ void spectrum_array::print(int suppress_txt = 0)
   {
     double fsum = 0, csum = 0;
     for (size_t i=0;i<flux.size();++i) { fsum += flux[i]; csum += click[i]; }
-    printf("# %s: flux_sum=%.3e click_sum=%.3e offgrid=%.6g\n",
-        name, fsum, csum, dropped_total_);
+    double frac = (csum + dropped_total_ > 0)
+        ? dropped_total_/(csum + dropped_total_) : 0.0;
+    printf("# %s: flux_sum=%.3e click_sum=%.3e offgrid=%.6g (%.2f%%)\n",
+        name, fsum, csum, dropped_total_, 100.0*frac);
+    if (frac > 0.05)
+      printf("# WARNING: %.2f%% of escaped clicks fell outside the "
+             "%s frequency grid; widen spectrum_nu_grid or set "
+             "spectrum_offgrid_mode=1\n", 100.0*frac, name);
   }
 
   int n_times  = this->time_grid.size();

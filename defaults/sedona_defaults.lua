@@ -57,9 +57,10 @@ ddmc_stuck_method                = 0  -- what to do past the cap:
                                       -- 0 teleport to diffusion front,
                                       -- 1 finish step as IMC in place,
                                       -- 2 hold until census
-debug_energy_closure             = 0  -- print per-step packet energy
+debug_energy_closure             = 1  -- print per-step packet energy
                                       -- accounting (emitted/escaped/
-                                      -- tallied/census) for debugging
+                                      -- tallied/census) so energy
+                                      -- leaks show up in the log
 ddmc_n_groups                    = 1  -- >1 enables frequency-group-lumped
                                       -- DDMC: packets leak at their group's
                                       -- Rosseland mean, freeing line-center
@@ -162,10 +163,16 @@ opacity_line_res_scatter    = 0    -- treat the A/(A+C) albedo fraction
                                    -- each scatter (recommended; faster
                                    -- and more accurate for strong lines)
 opacity_line_prd_dnu        = 0.02 -- fractional frequency half-width of
-                                   -- the mode-2 redistribution window;
-                                   -- a few bulk Doppler widths, so
-                                   -- photons reach the wings but cannot
-                                   -- hop to unrelated lines
+                                   -- the mode-2 redistribution window,
+                                   -- centered on the absorbing line's
+                                   -- rest frequency nu_0; the sampled
+                                   -- support is the line profile itself
+opacity_line_prd_recoherence = 0.0 -- mode-2 PRD recoherence probability:
+                                   -- with this chance the scattered
+                                   -- photon is re-emitted exactly at
+                                   -- nu_0 (the coherent Hummer RII
+                                   -- branch); 0 = complete
+                                   -- redistribution over the profile
 particles_emit_flatten      = 0    -- fraction of thermal particles drawn
                                    -- uniform-in-frequency-bin with energy
                                    -- reweighted; recovers rare optical
@@ -186,5 +193,12 @@ spectrum_suppress_txt = 0
 gamma_name     = ""
 gamma_nu_grid  = {1,1,1}
 
+spectrum_offgrid_mode       = 0    -- escaped packets outside the
+                                   -- spectrum frequency grid: 0 = drop
+                                   -- and report the fraction, 1 = count
+                                   -- in the nearest edge bin with a
+                                   -- warning. 0 keeps the printed
+                                   -- spectrum honest; use 1 only when
+                                   -- total-flux accounting matters more
 spectrum_particle_list_name = ""
 spectrum_particle_list_maxn = 1e9 -- max number of particles stored at any time in each rank's escaped_particles list
