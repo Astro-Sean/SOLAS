@@ -1,6 +1,7 @@
 ## SOLAS
 
-SOLAS is a fork of the SEDONA Monte Carlo radiative transfer code
+SOLAS (meaning 'Light' in Irish) is a fork of the SEDONA Monte Carlo
+radiative transfer code
 (https://github.com/dnkasen/pubsed). It computes light curves and
 spectra of supernovae and other transients using implicit Monte Carlo
 transport, with optional hydrodynamics.
