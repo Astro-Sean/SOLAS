@@ -1,6 +1,6 @@
 # SOLAS
 
-SOLAS (Irish for "light") is a development of the SEDONA Monte Carlo
+SOLAS (meaning 'Light' in Irish) is a development of the SEDONA Monte Carlo
 radiative transfer code.
 
 This repository is under development. The active source code lives on
