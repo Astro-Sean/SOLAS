@@ -408,9 +408,28 @@ ParticleFate transport::discrete_diffuse_DDMC(particle &p, double tstop)
     // factors the tally overcounted deposition by
     // 1/(eps_imc*inelastic_frac) and carried a v/c frame error.
     int tid = tl_tid();
-    tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift;
-    tl_e_abs_[tid][p.ind] += p.e*this_d*dshift*dshift*sigma_i*eps_i_cmf
-                           *grid->z[ii].eps_imc*inelastic_frac;
+    if (nu_grid_.size() == 1)
+    {
+      // Grey DDMC has no frequency events, so nothing ever kills the
+      // packet inside the diffusion walk. A linear p.e*d*chi tally is
+      // then unbounded (chi*c*dt >> 1 deposits more than the packet
+      // carries). Attenuate the weight exponentially instead: the
+      // deposited part is p.e*(1-exp(-chi_eff*l_cmf)) and the packet
+      // keeps the survivor fraction for the next hop.
+      double chi_eff = sigma_i*eps_i_cmf*grid->z[ii].eps_imc;
+      double x = chi_eff*this_d*dshift;
+      double survive = exp(-x);
+      tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift
+                               *((x > 1e-8) ? (1.0 - survive)/x : 1.0);
+      tl_e_abs_[tid][p.ind] += p.e*dshift*(1.0 - survive);
+      p.e *= survive;
+    }
+    else
+    {
+      tl_J_nu0_[tid][p.ind] += p.e*this_d*dshift*dshift;
+      tl_e_abs_[tid][p.ind] += p.e*this_d*dshift*dshift*sigma_i*eps_i_cmf
+                             *grid->z[ii].eps_imc*inelastic_frac;
+    }
 
     // Perform the event with a smaller distance
     if (event == scatter)  // effective scattering
