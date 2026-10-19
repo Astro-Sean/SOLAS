@@ -192,16 +192,20 @@ void transport::step(double dt)
   int n_escaped = clean_up_particle_vector();
 
   // Optional energy-closure diagnostic: packet energy in, escaped,
-  // tally-deposited, energy of packets removed by an absorbed fate,
-  // and energy left in census. The tally is a statistical estimator
-  // (absorbed packets are a roulette against it), so the closure
-  // residual is expected to vanish only within MC statistics.
+  // tally-deposited, and left in census. Packets removed by an
+  // absorbed fate (dead) are printed as a cross-check: they are the
+  // discrete roulette against the continuous tally, not an
+  // additional energy sink. The tally is a statistical estimator, so
+  // the residual vanishes only within MC statistics.
   if (debug_energy_closure_ && verbose)
   {
     double e_resid = 0;
     for (size_t i=0;i<particles.size();i++) e_resid += particles[i].e;
-    double e_close = e_start_step - e_esc_step - e_dead_abs
-                     - e_resid - e_abs_step;
+    // Absorbed packets are the discrete fate that the continuous tally
+    // estimates, so dead and abs_tally are two estimators of the same
+    // deposited energy. Counting both would double the sink; closure
+    // is start = escaped + census + tally, with dead as a cross-check.
+    double e_close = e_start_step - e_esc_step - e_resid - e_abs_step;
     // cumulative accounting catches a small per-step leak that the
     // noisy single-step residual would hide; the closure ratio should
     // approach 1 within MC error in a conservative step
