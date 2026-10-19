@@ -146,11 +146,17 @@ for this_test in testlist:
     try:
       import run_test
       status = run_test.run_test(pdf,runcommand)
-    except:
+    except Exception:
+      import traceback
+      traceback.print_exc()
       status = 200
     sys.path.remove(os.getcwd())
-    if 'run_test' in sys.modules:
-      del sys.modules['run_test']
+    # evict test-local helper modules too, or the next test's
+    # "import compare" resolves to a stale module from a previous
+    # test directory (compare.py names collide across tests)
+    for m in ['run_test', 'compare']:
+      if m in sys.modules:
+        del sys.modules[m]
 
     stoptime = timeit.default_timer()
     print("time = {:.1f} seconds".format(stoptime - starttime))
