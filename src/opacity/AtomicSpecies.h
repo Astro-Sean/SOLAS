@@ -107,7 +107,9 @@ public:
   void   bound_free_opacity_for_cooling (std::vector<double>&, double,double);
   double collisional_net_cooling_rate(double, double);
   void   bound_bound_opacity(std::vector<double>&, std::vector<double>&,
-                             std::vector<double>&, std::vector<double>&, double);
+                             std::vector<double>&, std::vector<double>&,
+                             std::vector<double>&, std::vector<double>&,
+                             double);
   void   line_expansion_opacity(std::vector<double>&,double,double);
   void   fuzzline_expansion_opacity(std::vector<double>& opac, double time);
 

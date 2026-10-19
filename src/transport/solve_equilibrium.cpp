@@ -19,6 +19,7 @@ int transport::solve_state_and_temperature(GasState* gas_state_ptr, int i)
   vector<OpacityType> res(nu_grid_.size());
   vector<OpacityType> fluor(nu_grid_.size());
   vector<OpacityType> bb_emis(nu_grid_.size());
+  vector<double> res_nu0(nu_grid_.size());
   emis.assign(emis.size(),0.0);
 
   int solve_error = 0;
@@ -40,7 +41,7 @@ int transport::solve_state_and_temperature(GasState* gas_state_ptr, int i)
     if (gas_state_ptr->use_nlte_ == 0)
     {
       solve_error = gas_state_ptr->solve_state();
-      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res,fluor,bb_emis);
+      gas_state_ptr->computeOpacity(abs_opacity_[i],scat,emis,res,fluor,bb_emis,res_nu0);
     }
 
     // Calculate equilibrium temperature.
@@ -129,13 +130,14 @@ double transport::rad_eq_function_LTE(GasState* gas_state_ptr, int c,double T, i
   vector<OpacityType> res(nu_grid_.size());
   vector<OpacityType> fluor(nu_grid_.size());
   vector<OpacityType> bb_emis(nu_grid_.size());
+  vector<double> res_nu0(nu_grid_.size());
   emis.assign(emis.size(),0.0);
 
   // recalculate opacities based on current T if desired
   if (solve_flag)
   {
     // solve_error = gas_state_ptr->solve_state();
-    gas_state_ptr->computeOpacity(abs_opacity_[c],scat,emis,res,fluor,bb_emis);
+    gas_state_ptr->computeOpacity(abs_opacity_[c],scat,emis,res,fluor,bb_emis,res_nu0);
   }
 
   // total energy emitted (to be calculated)

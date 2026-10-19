@@ -229,9 +229,18 @@ double AtomicSpecies::collisional_net_cooling_rate(double ne, double T)
 // Photons interacting through the res channel must keep their
 // comoving-frame frequency; the rest of the line opacity remains
 // absorptive and thermalizes as before.
+//
+// res_nu0/resmax are in-out arrays managed by the caller: res_nu0[j]
+// holds the rest frequency of the single line contributing the most
+// resonance opacity to bin j so far, and resmax[j] that line's
+// contribution. PRD redistribution needs the absorbing transition's
+// nu_0; with overlapping lines the dominant contributor is the right
+// approximation.
 //---------------------------------------------------------
 void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<double>& emis,
-                                        std::vector<double>& res, std::vector<double>& fluor, double ne)
+                                        std::vector<double>& res, std::vector<double>& fluor,
+                                        std::vector<double>& res_nu0, std::vector<double>& resmax,
+                                        double ne)
 {
   // zero out arrays
   for (size_t i=0;i<opac.size();++i) {opac[i] = 0; emis[i] = 0; res[i] = 0; fluor[i] = 0;}
@@ -337,6 +346,11 @@ void AtomicSpecies::bound_bound_opacity(std::vector<double>& opac, std::vector<d
       res[j]   += w_res*a_l;
       fluor[j] += w_fluor*a_l;
       emis[j]  += line_j*nu*phi;
+
+      // remember which line dominates the resonance opacity in this
+      // bin so transport can redistribute around the right nu_0
+      double c_res = w_res*a_l;
+      if (c_res > resmax[j]) {resmax[j] = c_res; res_nu0[j] = nu_0;}
 
       //if (isnan(alpha_0/nu/nu*phi)) std::cout << alpha_0 << " " << nlow << " " << nup << "\n";
     //  std::cout << nu_0 << " " << nu-nu_0 << " " << line_j*nu*phi/(alpha_0/nu/nu*phi) << " "

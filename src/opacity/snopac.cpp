@@ -18,6 +18,7 @@ static locate_array nu_grid;
 static GasState gas;
 static ParameterReader params;
 static std::vector<OpacityType> abs_opacity, scat_opacity, tot_opacity, emissivity, res_opacity, fluor_opacity, bb_emissivity;
+static std::vector<double> res_nu0;
 
 // functions
 static double rosseland_mean(std::vector<OpacityType> opac);
@@ -121,6 +122,7 @@ verbose = (my_rank == 0);
   res_opacity.resize(ng);
   fluor_opacity.resize(ng);
   bb_emissivity.resize(ng);
+  res_nu0.resize(ng);
 
   if (verbose) gas.print_properties();
 
@@ -171,7 +173,7 @@ void write_frequency_file(std::string outfile, int style)
       gas.temp_ = *temp;
       gas.dens_ = this_dens;
       gas.solve_state();
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity,res_nu0);
 
       double x;
       for (int i=0;i<nu_grid.size();++i)
@@ -254,7 +256,7 @@ void write_mean_opacities(std::string outfile)
       gas.dens_ = this_dens;
       std::vector<double> J_nu;
       gas.solve_state(J_nu);
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity,res_nu0);
 
       for (int i=0;i<nu_grid.size();++i)
         tot_opacity[i] = abs_opacity[i] + scat_opacity[i] + res_opacity[i] + fluor_opacity[i];
@@ -324,7 +326,7 @@ void write_mesa_file(std::string mesafile)
       gas.dens_ = this_dens;
       std::vector<double> J_nu;
       gas.solve_state(J_nu);
-      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity);
+      gas.computeOpacity(abs_opacity,scat_opacity,emissivity,res_opacity,fluor_opacity,bb_emissivity,res_nu0);
 
       for (int i=0;i<nu_grid.size();++i)
       {

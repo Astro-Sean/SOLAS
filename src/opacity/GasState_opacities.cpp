@@ -13,21 +13,23 @@ void GasState::computeOpacity(std::vector<OpacityType>& abs,
 			      std::vector<OpacityType>& tot_emis,
 			      std::vector<OpacityType>& res,
 			      std::vector<OpacityType>& fluor,
-			      std::vector<OpacityType>& bb_emis)
+			      std::vector<OpacityType>& bb_emis,
+			      std::vector<double>& res_nu0)
 {
 
 
   int ns = nu_grid_.size();
-  std::vector<double> opac, aopac, emis, lres, lfluor;
+  std::vector<double> opac, aopac, emis, lres, lfluor, resmax;
   opac.resize(ns);
   aopac.resize(ns);
   emis.resize(ns);
   lres.resize(ns);
   lfluor.resize(ns);
+  resmax.assign(ns, 0.0);
 
   // zero out passed opacity arrays
   for (int i=0;i<ns;i++) {abs[i] = 0; scat[i] = 0; tot_emis[i] = 0; res[i] = 0;
-                          fluor[i] = 0; bb_emis[i] = 0;}
+                          fluor[i] = 0; bb_emis[i] = 0; res_nu0[i] = 0;}
 
   //-----------------------------------------
   /// if grey opacity, just do simple thing
@@ -88,7 +90,7 @@ void GasState::computeOpacity(std::vector<OpacityType>& abs,
     //---
     if (use_bound_bound_opacity)
     {
-      bound_bound_opacity(opac, emis, lres, lfluor);
+      bound_bound_opacity(opac, emis, lres, lfluor, res_nu0, resmax);
       for (int i=0;i<ns;i++)
       {
          // only collisional quenching thermalizes; the resonance and
@@ -388,7 +390,8 @@ void GasState::bound_free_opacity(std::vector<double>& opac, std::vector<double>
 // uses Doppler broadening for now
 //----------------------------------------------------------------
 void GasState::bound_bound_opacity(std::vector<double>& opac, std::vector<double>& emis,
-				   std::vector<double>& res, std::vector<double>& fluor)
+				   std::vector<double>& res, std::vector<double>& fluor,
+				   std::vector<double>& res_nu0, std::vector<double>& resmax)
 {
   // zero out opacity vector
   int ng = nu_grid_.size();
@@ -400,7 +403,8 @@ void GasState::bound_bound_opacity(std::vector<double>& opac, std::vector<double
   // sum up the bound-bound opacity from every atom
   for (int i=0;i<na;i++)
   {
-    bound_bound_opacity(i,atom_opac, atom_emis, atom_res, atom_fluor);
+    bound_bound_opacity(i,atom_opac, atom_emis, atom_res, atom_fluor,
+                        res_nu0, resmax);
     for (int j=0;j<ng;j++) {
         opac[j]  += atom_opac[j];
         emis[j]  += atom_emis[j];
@@ -414,12 +418,13 @@ void GasState::bound_bound_opacity(std::vector<double>& opac, std::vector<double
 // bound-bound opacity (line) from single element iatom
 //----------------------------------------------------------------
 void GasState::bound_bound_opacity(int iatom, std::vector<double>& opac, std::vector<double>& emis,
-				   std::vector<double>& res, std::vector<double>& fluor)
+				   std::vector<double>& res, std::vector<double>& fluor,
+				   std::vector<double>& res_nu0, std::vector<double>& resmax)
 {
   // zero out opacity vector
   int ng = nu_grid_.size();
   for (int j=0;j<ng;j++) {opac[j] = 0; emis[j] = 0; res[j] = 0; fluor[j] = 0;}
-  atoms[iatom].bound_bound_opacity(opac, emis, res, fluor, n_elec_);
+  atoms[iatom].bound_bound_opacity(opac, emis, res, fluor, res_nu0, resmax, n_elec_);
 }
 
 

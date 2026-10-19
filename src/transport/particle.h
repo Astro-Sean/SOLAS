@@ -33,6 +33,14 @@ class particle
   // every call to propagate(), i.e. at the start of each time step.
   int      no_ddmc;
 
+  // Comoving rest frequency of the line through which the packet last
+  // interacted via the resonance channel. Needed by PRD
+  // redistribution (redist==2): the outgoing frequency must be
+  // sampled relative to the absorbing transition's nu_0, not the
+  // detuned incoming frequency. Zero when the last interaction was
+  // not a resonance-line event.
+  double   nu_line;
+
   ParticleFate fate;
 
   double r() 

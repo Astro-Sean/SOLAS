@@ -340,36 +340,52 @@ void transport::isotropic_scatter(particle *p, int redist)
   if (redist == 1) sample_photon_frequency(p);
   else if (redist == 2)
   {
-    // Partial redistribution within the line: resample the comoving
-    // frequency from the local resonance-line opacity profile, which
-    // encodes the line shape. Photons diffuse in frequency into the
-    // wings where opacity drops, instead of being locked at line
-    // center -- both more physical than strict comoving coherence
-    // for resonance lines and far less expensive in trapping zones.
-    int nb = nu_grid_.size();
-    int i0 = nu_grid_.locate_within_bounds(p->nu);
-    if (i0 < 0) i0 = 0;
-    if (i0 >= nb) i0 = nb - 1;
-    const vector<OpacityType> &res = line_res_opacity_[p->ind];
-    double nu_lo = p->nu*(1.0 - res_prd_dnu_);
-    double nu_hi = p->nu*(1.0 + res_prd_dnu_);
-    int lo = nu_grid_.locate_within_bounds(nu_lo);
-    int hi = nu_grid_.locate_within_bounds(nu_hi);
-    if (lo < 0) lo = 0;
-    if (hi < 0 || hi >= nb) hi = nb - 1;
-    double wsum = 0;
-    for (int j=lo;j<=hi;j++) wsum += res[j];
-    if (wsum > 0)
+    // Partial redistribution for a resonance line (Hummer RII in the
+    // comoving frame). Two branches: with probability
+    // res_prd_recoherence_ the photon is re-emitted at the rest
+    // frequency nu_0 of the absorbing transition (stored on the
+    // particle by get_opacity as the dominant resonance line in this
+    // bin); otherwise the outgoing frequency is drawn from the line
+    // profile itself -- the resonance opacity array, which encodes
+    // the Voigt shape. Anchoring the sampling window at nu_0, not at
+    // the incoming frequency, is what lets a core photon jump to the
+    // wings (and a wing photon return to the core); anchoring at the
+    // incoming frequency made the detuning perform a flat random walk.
+    // The packet energy p.e is deliberately not touched: resonance
+    // scattering conserves comoving packet energy.
+    double nu0 = p->nu_line;
+    if (nu0 > 0 && rangen.uniform() < res_prd_recoherence_)
+      p->nu = nu0;
+    else
     {
-      double r = rangen.uniform()*wsum;
-      double acc = 0;
-      int jpick = i0;
-      for (int j=lo;j<=hi;j++)
+      // without a recorded transition, fall back to sampling the
+      // local resonance profile around the incoming frequency
+      double nu_c = (nu0 > 0) ? nu0 : p->nu;
+      int nb = nu_grid_.size();
+      int i0 = nu_grid_.locate_within_bounds(p->nu);
+      if (i0 < 0) i0 = 0;
+      if (i0 >= nb) i0 = nb - 1;
+      const vector<OpacityType> &res = line_res_opacity_[p->ind];
+      double nu_lo = nu_c*(1.0 - res_prd_dnu_);
+      double nu_hi = nu_c*(1.0 + res_prd_dnu_);
+      int lo = nu_grid_.locate_within_bounds(nu_lo);
+      int hi = nu_grid_.locate_within_bounds(nu_hi);
+      if (lo < 0) lo = 0;
+      if (hi < 0 || hi >= nb) hi = nb - 1;
+      double wsum = 0;
+      for (int j=lo;j<=hi;j++) wsum += res[j];
+      if (wsum > 0)
       {
-        acc += res[j];
-        if (acc >= r) {jpick = j; break;}
+        double r = rangen.uniform()*wsum;
+        double acc = 0;
+        int jpick = i0;
+        for (int j=lo;j<=hi;j++)
+        {
+          acc += res[j];
+          if (acc >= r) {jpick = j; break;}
+        }
+        p->nu = nu_grid_.sample(jpick, rangen.uniform());
       }
-      p->nu = nu_grid_.sample(jpick, rangen.uniform());
     }
   }
   else if (redist == 3)
