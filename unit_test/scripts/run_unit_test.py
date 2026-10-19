@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""Run a single sedona test and save its comparison figure.
+"""Run a single unit test and save its comparison figure.
 
 Usage:
     python run_unit_test.py <test_dir> [-n NRANKS]
     python run_unit_test.py --list
 
-<test_dir> is a path relative to the repository's tests/ directory,
-e.g. P-Cygni_line or adiabatic_expansion/ddmc.
+<test_dir> is a path relative to unit_test/, e.g. P-Cygni_line_prd.
+A unit test is a directory containing param.lua and run_test.py.
 """
 
 import argparse
@@ -21,15 +21,15 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("test", nargs="?", help="test dir relative to tests/")
+    parser.add_argument("test", nargs="?", help="test dir relative to unit_test/")
     parser.add_argument("-n", dest="nproc", default="2", help="mpi ranks")
     parser.add_argument("--list", action="store_true", help="list tests")
     args = parser.parse_args()
 
     here = os.path.dirname(os.path.abspath(__file__))
     repo = os.path.abspath(os.path.join(here, "..", ".."))
-    tests_dir = os.path.join(repo, "tests")
-    plots_dir = os.path.join(here, "..", "plots")
+    tests_dir = os.path.join(repo, "unit_test")
+    plots_dir = os.path.join(tests_dir, "plots")
 
     if args.list:
         for root, dirs, files in os.walk(tests_dir):
