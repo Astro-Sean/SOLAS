@@ -72,6 +72,13 @@ def main():
         status = 200
 
     pdf.close()
+
+    # every unit test should emit at least one figure page
+    empty = os.path.getsize(pdfname) < 1000
+    if empty:
+        print("WARNING: %s made no plot (empty %s)" % (args.test, pdfname))
+        status = status or 300
+
     print("%s -> %s (status %d)" % (args.test, pdfname, status))
     return 0 if status == 0 else status
 
