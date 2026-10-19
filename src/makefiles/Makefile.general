@@ -1,4 +1,4 @@
-CXX   = /usr/local/bin/mpicxx
+CXX   = mpicxx
 CXXFLAGS = -O3 -pedantic -Wall -Wno-c++11-long-long
 
 include make.exec

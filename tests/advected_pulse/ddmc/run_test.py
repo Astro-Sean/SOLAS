@@ -30,7 +30,18 @@ def run_test(pdf="",runcommand=""):
     #-------------------------------------------
     if (runcommand != ""):
     	os.system("rm spectrum_* plt_* integrated_quantities.dat")
-    	os.system(runcommand)
+    	# strip the harness redirect so the closure lines can be parsed
+    	# from a local log
+    	import re
+    	log = "closure_run.log"
+    	cmd = re.sub(r"\s*>>.*$", "", runcommand)
+    	os.system(cmd + " > " + log + " 2>&1")
+    	# DDMC energy closure: start = esc + census + abs tally within
+    	# MC error; assert the last-step residual fraction
+    	fr = re.findall(r"residual=\S+ \((\S+) frac\)", open(log).read())
+    	if fr and abs(float(fr[-1])) > 0.03:
+    	    print("FAIL: DDMC energy-closure residual %s exceeds 3%%" % fr[-1])
+    	    return 1
 
     #-------------------------------------------
     # compare the output

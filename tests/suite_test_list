@@ -32,6 +32,9 @@ lucy_supernova/3D_log_grid
 lucy_supernova/3D-testing_nonuniform_grid
 #lucy_supernova/3D-testing_spherical_grid
 one_zone_rad_eq/grey_IMC
+P-Cygni_line
+P-Cygni_line_prd
 sod_shock_tube
 #ellipsoidal_outflow_2D/2D_benchmark
 ellipsoidal_outflow_2D/2D-testing_nonuniform_grid
+stromgren
