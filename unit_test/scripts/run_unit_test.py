@@ -55,9 +55,15 @@ def main():
     os.chdir(test_dir)
     sys.path.insert(0, test_dir)
 
+    # each test keeps its own output: run log and figures land in
+    # <test>/plots/ rather than a shared top-level directory
+    out_dir = os.path.join(test_dir, "plots")
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+
     runcommand = "mpirun -np %s ./sedona6.ex param.lua" % args.nproc
     pdfname = os.path.join(
-        plots_dir, args.test.replace("/", "_") + ".pdf"
+        out_dir, os.path.basename(args.test.rstrip("/")) + ".pdf"
     )
     pdf = PdfPages(pdfname)
 
