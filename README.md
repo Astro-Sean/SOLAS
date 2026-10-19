@@ -1,70 +1,65 @@
-<img  align="right"  src="doc/sedona_logo.png" alt="drawing" width="200"/>
+## SOLAS
 
-## Overview
+SOLAS is a fork of the SEDONA Monte Carlo radiative transfer code
+(https://github.com/dnkasen/pubsed). It computes light curves and
+spectra of supernovae and other transients using implicit Monte Carlo
+transport, with optional hydrodynamics.
 
-SOLAS (Irish for "light") is a development of the SEDONA Monte Carlo
-radiative transfer code by Kasen (https://github.com/dnkasen/pubsed).
+The code here is under development.
 
-Like SEDONA, SOLAS calculates the radiation signatures of supernovae
-and other transient phenomena, on a personal computer or cluster, with
-hydrodynamic solvers and an implicit Monte Carlo radiation transport
-scheme.  See Kasen et al. (2006), Roth & Kasen (2015) for the method.
+## Changes relative to pubsed
 
-## New features relative to pubsed
+Line opacity:
 
-Line physics:
-- Resonance-line scattering channel: absorbed line photons can be
-  re-emitted coherently instead of always thermalizing
-  (`opacity_line_res_scatter`), with an optional partial-redistribution
-  frequency shift (`opacity_line_prd_dnu`)
-- Fluorescence channel: absorbed line photons can be re-emitted on
-  other downward transitions of the same atom
-- Branching ratios from van Regemorter collisional quenching versus
-  total radiative decay rates
-- Local Sobolev velocity gradient (|dv/dr|) for expansion-opacity
-  line optical depths in non-homologous flows
-- Configurable line wing width in Doppler units
-  (`opacity_line_wing_dnu`)
+- Resonance-line scattering: a line photon can be re-emitted at the
+  same frequency instead of being thermalized
+  (`opacity_line_res_scatter`, `opacity_line_prd_dnu`)
+- Fluorescence: a line photon can come out on a different downward
+  transition of the same atom
+- The split between scattering, fluorescence, and absorption uses the
+  collisional quenching rate versus the total radiative decay rate
+- Expansion opacity uses the local |dv/dr| for the Sobolev length
+  instead of assuming 1/t
+- Line wing width is a parameter (`opacity_line_wing_dnu`)
 
-Discrete diffusion (DDMC):
-- Selectable stuck-packet handling (`ddmc_stuck_method`):
-  teleport to a diffusion front (upstream behavior), hand back to IMC
-  in place, or hold to census
-- Optional multi-group DDMC with per-group Rosseland mean opacities
-  (`ddmc_n_groups`)
-- Rosseland-mean leakage opacity and DDMC diagnostics (entries,
-  diffusion steps, handbacks, maximum steps)
+Discrete diffusion:
+
+- `ddmc_stuck_method` selects what to do when a packet takes too many
+  diffusion steps: move it to a front, return it to IMC, or hold it
+  to census
+- `ddmc_n_groups` enables multi-group DDMC with per-group Rosseland
+  means
+- DDMC diagnostics are printed each step (entries, steps, handbacks)
 
 Emission:
-- Optional importance-weighted (flattened) radioactive emission
-  (`particles_emit_flatten`)
 
-Correctness and robustness:
-- Energy-closure diagnostic per step (`debug_energy_closure`): emitted
-  vs escaped vs absorbed-tally vs census energy
-- Global MPI normalization of the escaped-spectrum rescale factor;
-  previously each rank rescaled by its own noisy local fraction
-- MPI reductions added for the J_nu and radiation-force tallies
-- Per-thread Monte Carlo tallies remove OpenMP atomic contention
-- Fail-safe temperature solver: failed root finds keep the previous
-  gas temperature and emit a warning instead of silently zeroing it
-- NLTE level-population solver falls back to LTE on singular rate
-  matrices instead of aborting
-- Inner-boundary velocity read from the model instead of an artificial
-  zero (removes a spurious dv/dr ramp in truncated models)
-- Comoving-frame frequency used in the DDMC interface escape check
-- Out-of-bounds CDF sampling fixed; off-grid escaped packets counted
-  and reported
+- `particles_emit_flatten` uses importance weighting for radioactive
+  emission
 
-## Get Started!
+Bug fixes and robustness:
 
-To get started, read the documentation at
-https://dnkasen.github.io/sedona_documentation/
-The documentation can be edited by modifying the .rst files the
-doc/sphinx_doc folder
+- Energy-closure diagnostic per step (`debug_energy_closure`)
+- Escaped-spectrum rescale now uses global MPI counters; each rank
+  previously rescaled by its own local escape fraction
+- Missing MPI reductions added for J_nu and radiation-force tallies
+- Per-thread tallies replace OpenMP atomics
+- A failed temperature solve keeps the previous temperature and warns
+  instead of silently setting it to zero
+- The NLTE solver falls back to LTE on a singular rate matrix
+- The inner-boundary velocity is read from the model instead of being
+  set to zero
+- Off-grid escaped packets are counted and reported
+- Fixed an out-of-bounds CDF sample that inflated escaped packet
+  energies
 
-You can find (some of the) development guidelines at
-https://github.com/dnkasen/sedona6/wiki/Developers-Guide.
+## Get Started
 
-To download additional atomic data, go to
+Documentation: https://dnkasen.github.io/sedona_documentation/
+
+Additional atomic data:
 https://www.dropbox.com/sh/pw9ttd90w503vzq/AAD3H78_5dGSFCRgBoupg0Iva?dl=0
+
+## References
+
+- Kasen, Thomas & Nugent 2006, ApJ 651, 366
+- Roth & Kasen 2015, ApJS 217, 9
