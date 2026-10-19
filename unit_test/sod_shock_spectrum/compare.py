@@ -96,7 +96,6 @@ def compare(pdf, kappa=0.05):
 
     py.clf()
     py.step(lam, flam, where="mid")
-    py.plot(lam, flam_r, "--")
     py.step(
         lam,
         flam_r * trans_pred,
@@ -110,7 +109,7 @@ def compare(pdf, kappa=0.05):
     py.title(
         "spectrum through evolved shock, grey kappa=%.3f cm2/g" % kappa
     )
-    py.legend(["SEDONA kappa>0", "unattenuated", "2*E3(tau) analytic"])
+    py.legend(["SEDONA kappa>0", "2*E3(tau) analytic"])
     if pdf != "":
         pdf.savefig()
 
