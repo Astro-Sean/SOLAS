@@ -202,10 +202,21 @@ void transport::step(double dt)
     for (size_t i=0;i<particles.size();i++) e_resid += particles[i].e;
     double e_close = e_start_step - e_esc_step - e_dead_abs
                      - e_resid - e_abs_step;
+    // cumulative accounting catches a small per-step leak that the
+    // noisy single-step residual would hide; the closure ratio should
+    // approach 1 within MC error in a conservative step
+    e_cum_start_ += e_start_step;
+    e_cum_esc_   += e_esc_step;
+    e_cum_abs_   += e_abs_step;
+    e_cum_dead_  += e_dead_abs;
     printf("# Energy closure: start=%.4e esc=%.4e abs_tally=%.4e "
            "dead=%.4e resid=%.4e | residual=%.4e (%.3e frac)\n",
            e_start_step, e_esc_step, e_abs_step, e_dead_abs, e_resid,
            e_close, (e_start_step > 0) ? e_close/e_start_step : 0.0);
+    printf("#   cumulative: emit=%.4e esc=%.4e abs_tally=%.4e "
+           "dead=%.4e | L_abs/L_emit=%.4f\n",
+           e_cum_start_, e_cum_esc_, e_cum_abs_, e_cum_dead_,
+           (e_cum_start_ > 0) ? e_cum_abs_/e_cum_start_ : 0.0);
   }
 
   // calculate percent particles escaped, and rescale if wanted
@@ -243,6 +254,21 @@ void transport::step(double dt)
       double fac = (per_esc > 0) ? 1.0/per_esc : 1.0;
       if (per_esc <= 0 && verbose)
         cout << "# Warning: no particles escaped; skipping rescale\n";
+      // per_esc is a Monte Carlo estimate over one iteration, so the
+      // raw factor jitters by ~1/sqrt(N_escaped); smoothing it over a
+      // trailing EMA (k=10 iterations) keeps the same normalization in
+      // the mean without stamping single-step noise onto the output.
+      {
+        double alpha = 2.0/(10.0 + 1.0);
+        rescale_fac_ema_ = (rescale_fac_ema_ > 0)
+            ? (1.0 - alpha)*rescale_fac_ema_ + alpha*fac
+            : fac;
+        if (verbose)
+          printf("# rescale: raw fac=%.4e ema=%.4e (jitter %.3f%%)\n",
+                 fac, rescale_fac_ema_,
+                 100.0*fabs(fac/rescale_fac_ema_ - 1.0));
+        fac = rescale_fac_ema_;
+      }
       optical_spectrum.rescale(fac);
       for (int i=0;i<grid->n_zones;++i)
       {
@@ -277,6 +303,18 @@ void transport::step(double dt)
              "%lld particles >1e5 steps\n",
              dd_recv[0], dd_recv[1], avg, dd_recv[2], dd_max, dd_recv[3]);
     }
+  }
+
+  // line-channel clamp counter: nonzero means some zones had
+  // res+fluor opacity fractions exceeding the non-thermal share
+  {
+    long long cl_send = res_chan_clamps_, cl_recv = 0;
+    MPI_Allreduce(&cl_send, &cl_recv, 1, MPI_LONG_LONG, MPI_SUM,
+                  MPI_COMM_WORLD);
+    if (verbose && cl_recv > 0)
+      printf("# Warning: %lld opacity lookups had res+fluor fractions "
+             "clamped to the non-thermal share\n", cl_recv);
+    res_chan_clamps_ = 0;
   }
 
   tend = get_system_time();
