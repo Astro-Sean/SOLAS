@@ -1,0 +1,10 @@
+sedona6.ex
+plt_*.dat
+plt_*.h5
+spectrum*.dat
+spectrum*.h5
+*.log
+evolved.mod
+hydro_data.dat
+integrated_quantities.dat
+__pycache__/
