@@ -1,16 +1,18 @@
-"""Homologous shell for the H-alpha P-Cygni demo.
+"""Homologous power-law shell for the H-alpha P-Cygni demo.
 
-100 zones, v = r/t_exp from 2e7 to 2e9 cm/s, t_exp = 10 days,
-rho = 5e-13 g/cm3, T = 6000 K. Photosphere at the core boundary
-r_core = 1e9*t_exp. Density is chosen so hydrogen is partially
-neutral at this T, giving a saturated H-alpha line.
+200 zones, v = r/t_exp from 1e7 to 2e9 cm/s, t_exp = 10 days.
+rho(v) = rho0 * (v/v_ref)^-n, n = 10, as in RSG envelope models.
+T = 6000 K uniform. The photosphere sits at the core boundary
+r_core = 1e9*t_exp, so only the vphot..vmax shell forms the line.
 """
 
-nx = 100
+nx = 200
 vmax = 2e9
+vref = 1e9
 texp = 10 * 3600.0 * 24
 temp = 6e3
-rho = 5e-13
+rho0 = 5e-12
+npow = 10.0
 
 with open("constant_standard.mod", "w") as fout:
     fout.write("1D_sphere standard\n")
@@ -19,4 +21,5 @@ with open("constant_standard.mod", "w") as fout:
     for i in range(nx):
         v = (i + 1.0) * vmax / nx
         r = v * texp
+        rho = rho0 * max(v / vref, 1.0) ** (-npow)
         fout.write("%10.4e %10.4e %10.4e %10.4e 1.0\n" % (r, v, rho, temp))
