@@ -9,7 +9,7 @@ days = 3600.0*24
 
 core_n_emit      = 1e6
 core_radius      = 1e9*10*days
-core_luminosity  = 1e42
+core_luminosity  = 3e44
 core_temperature = 0
 core_spectrum_file = "core_spec.dat"
 
@@ -28,3 +28,5 @@ line_velocity_width      = 1e7
 
 transport_steady_iterate        = 1
 transport_radiative_equilibrium = 0
+particles_n_emit_thermal = 5e5
+particles_emit_flatten = 0.3

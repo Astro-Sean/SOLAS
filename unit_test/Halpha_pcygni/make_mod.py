@@ -7,11 +7,11 @@ r_core = 1e9*t_exp, so only the vphot..vmax shell forms the line.
 """
 
 nx = 200
-vmax = 2e9
+vmax = 1.3e9
 vref = 1e9
 texp = 10 * 3600.0 * 24
 temp = 6e3
-rho0 = 5e-12
+rho0 = 1.5e-11
 npow = 10.0
 
 with open("constant_standard.mod", "w") as fout:
